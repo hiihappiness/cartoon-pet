@@ -1,6 +1,6 @@
 const APP_VERSION = {
   major: 2,
-  minor: 2
+  minor: 1
 };
 document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 const SW_TAG = `${APP_VERSION.major}.${APP_VERSION.minor}`;
@@ -129,40 +129,59 @@ function toggleSound(){
   soundEnable = !soundEnable;
   document.getElementById('soundBtn').innerText = soundEnable ? "🔊音效开" : "🔇音效关";
 }
-// ===================== PWA serviceWorker 【修复：移除注册url?v参数】 =====================
+// ===================== PWA serviceWorker 修复更新逻辑 =====================
 let newWorker = null;
+let swReg = null;
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register(`./service-worker.js`).then(reg => {
+    swReg = reg;
+    // 页面刚打开，如果已经有等待中的新版本（后台已经下载好）
+    if(reg.waiting){
+      showUpdateConfirm(reg.waiting);
+    }
     reg.addEventListener('updatefound', () => {
       newWorker = reg.installing;
       if(!newWorker) return;
       newWorker.addEventListener('statechange', () => {
         if (newWorker.state === 'waiting') {
-          if (confirm("🍄检测到新版本，确认立即更新并刷新页面？")) {
-            newWorker.postMessage({ type: 'SKIP_WAITING' });
-            newWorker.addEventListener('statechange',()=>{
-              if(newWorker.state === "activated"){
-                location.reload();
-              }
-            })
-          }
+          showUpdateConfirm(newWorker);
         }
       })
     })
   })
 }
+
+// 弹出更新确认，确认后skipWaiting并刷新页面
+function showUpdateConfirm(worker){
+  if(!worker) return;
+  if (confirm("🍄检测到新版本，确认立即更新并刷新页面？")) {
+    worker.postMessage({ type: 'SKIP_WAITING' });
+    worker.addEventListener('statechange',()=>{
+      if(worker.state === "activated"){
+        location.reload();
+      }
+    })
+  }
+}
+
 async function checkUpdate() {
   if(!navigator.serviceWorker){
     alert("当前环境不支持PWA更新");
     return;
   }
-  const reg = await navigator.serviceWorker.getRegistration();
+  const reg = swReg ?? await navigator.serviceWorker.getRegistration();
   if(!reg){ alert("无注册服务"); return; }
   try{
     await reg.update();
-    alert("✅当前已经是最新版本");
+    // update之后，已经存在waiting，直接弹窗
+    if(reg.waiting){
+      showUpdateConfirm(reg.waiting);
+    }else{
+      alert("✅当前已经是最新版本");
+    }
   }catch(err){
     alert("⚠️更新检查失败，请稍后重试");
+    console.error(err);
   }
 }
 const defaultData = {
