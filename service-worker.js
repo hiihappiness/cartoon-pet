@@ -1,4 +1,4 @@
-const CACHE_NAME = "mushroom-pet-v1";
+const CACHE_NAME = "mushroom-pet-v1.1";
 const assetsToCache = [
   "./",
   "./index.html",
