@@ -72,6 +72,11 @@ body{
   gap:12px;
   margin-top:8px;
 }
+.btn-group-row{
+  display:flex;
+  gap:12px;
+  margin-top:8px;
+}
 button{
   flex:1;
   border:none;
@@ -82,12 +87,17 @@ button{
   font-size:15px;
 }
 button:active{background:#c43c3c}
+.btn-gray{
+  background:#888;
+}
+.btn-gray:active{background:#666}
 .tip{
   margin-top:12px;
   font-size:13px;
   color:#777;
   text-align:center;
 }
+/* 弹窗通用样式 */
 .modal{
   position:fixed;
   inset:0;
@@ -96,12 +106,24 @@ button:active{background:#c43c3c}
   align-items:center;
   justify-content:center;
   z-index:99;
+  padding:16px;
 }
 .modal-content{
   background:#fff;
   padding:24px;
   border-radius:16px;
   text-align:center;
+  max-width:320px;
+  width:100%;
+}
+.modal-content p{
+  margin:10px 0 16px;
+  line-height:1.6;
+  text-align:left;
+}
+.modal-btn-wrap{
+  display:flex;
+  gap:10px;
 }
 /* 点击团子抖动动画 */
 @keyframes shake {
@@ -111,6 +133,22 @@ button:active{background:#c43c3c}
 }
 .shake{
   animation: shake 0.3s ease-in-out;
+}
+input[type="file"]{
+  display:none;
+}
+.label-file{
+  display:block;
+  background:#e65c5c;
+  color:#fff;
+  padding:10px;
+  border-radius:10px;
+  margin:8px 0;
+  cursor:pointer;
+}
+.check-wrap{
+  text-align:left;
+  margin:10px 0;
 }
 </style>
 </head>
@@ -138,17 +176,48 @@ button:active{background:#c43c3c}
     <button onclick="feed()">🍚喂食</button>
     <button onclick="pet()">🤲抚摸</button>
   </div>
-  <div class="btn-group" style="margin-top:8px">
-    <button onclick="resetPet()" style="background:#888">🔄重置</button>
+  <div class="btn-group-row">
+    <button onclick="openSaveModal()">💾存档</button>
+    <button onclick="resetPet()" class="btn-gray">🔄重置</button>
   </div>
   <div class="tip"><span id="statusText">乖乖待着哦~</span></div>
 </div>
 
+<!-- 升级弹窗 -->
 <div class="modal" id="levelUpModal">
   <div class="modal-content">
     <h3>🎉升级啦！</h3>
     <p>蘑菇团子等级提升</p>
-    <button onclick="closeModal()">知道啦</button>
+    <button onclick="closeLevelModal()">知道啦</button>
+  </div>
+</div>
+
+<!-- 存档弹窗 -->
+<div class="modal" id="saveModal">
+  <div class="modal-content">
+    <h3>存档管理</h3>
+    <p>导出存档可以备份进度，换手机后导入恢复</p>
+    <button onclick="exportSave()">📥导出存档</button>
+    <label class="label-file">
+      📤导入存档
+      <input type="file" id="fileInput" accept=".json">
+    </label>
+    <div class="modal-btn-wrap">
+      <button onclick="closeSaveModal()" class="btn-gray">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新手引导弹窗 -->
+<div class="modal" id="guideModal">
+  <div class="modal-content">
+    <h3>🍄欢迎来到蘑菇团子</h3>
+    <p>✅ 喂食：增加饱食度，团子不会饿肚子<br>✅ 抚摸：提升团子心情<br>⚠️ 饱食、心情会随时间慢慢下降<br>💡 闲置一段时间，团子会自己睡觉休息<br>💾 记得定期【存档备份】防止进度丢失</p>
+    <div class="check-wrap">
+      <input type="checkbox" id="noMoreGuide">
+      <label for="noMoreGuide">不再弹出此引导</label>
+    </div>
+    <button onclick="closeGuideModal()">开始照料</button>
   </div>
 </div>
 
@@ -158,7 +227,6 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./service-worker.js");
 }
 
-// 相对路径，同目录
 const imgList = {
   normal: "./normal.png",
   happy: "./happy.png",
@@ -168,7 +236,8 @@ const imgList = {
   play: "./play.png"
 };
 
-let data = JSON.parse(localStorage.getItem('mushroomPetData')) || {
+// 默认初始数据
+const defaultData = {
   level:1,
   exp:0,
   expNeed:100,
@@ -178,13 +247,101 @@ let data = JSON.parse(localStorage.getItem('mushroomPetData')) || {
   isPlaying: false
 };
 
+// ===== 数据容错读取 =====
+function loadData(){
+  let raw = localStorage.getItem('mushroomPetData');
+  let data;
+  if(!raw){
+    data = {...defaultData};
+    saveData(data);
+    return data;
+  }
+  try{
+    data = JSON.parse(raw);
+    // 校验必要字段，缺失则重置
+    const keys = ["level","exp","expNeed","hunger","mood","lastActive","isPlaying"];
+    for(let k of keys){
+      if(!(k in data)) throw new Error("字段缺失");
+    }
+  }catch(e){
+    alert("存档数据损坏，已为你重置一只全新蘑菇团子");
+    data = {...defaultData};
+    saveData(data);
+  }
+  return data;
+}
+function saveData(data){
+  localStorage.setItem('mushroomPetData', JSON.stringify(data));
+}
+let data = loadData();
+
 const petImg = document.getElementById('petImg');
 const levelEl = document.getElementById('level');
 const expBar = document.getElementById('expBar');
 const hungerBar = document.getElementById('hungerBar');
 const moodBar = document.getElementById('moodBar');
 const statusText = document.getElementById('statusText');
-const modal = document.getElementById('levelUpModal');
+const levelUpModal = document.getElementById('levelUpModal');
+const saveModal = document.getElementById('saveModal');
+const guideModal = document.getElementById('guideModal');
+const fileInput = document.getElementById('fileInput');
+
+// ===== 新手引导逻辑 =====
+function checkGuide(){
+  const hide = localStorage.getItem("hideGuide");
+  if(hide !== "1"){
+    guideModal.style.display = "flex";
+  }
+}
+function closeGuideModal(){
+  const ck = document.getElementById("noMoreGuide");
+  if(ck.checked){
+    localStorage.setItem("hideGuide","1");
+  }
+  guideModal.style.display = "none";
+}
+
+// ===== 存档导出导入 =====
+function openSaveModal(){
+  saveModal.style.display = "flex";
+}
+function closeSaveModal(){
+  saveModal.style.display = "none";
+}
+function exportSave(){
+  const str = JSON.stringify(data,null,2);
+  const blob = new Blob([str], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "mushroom-save.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+fileInput.onchange = function(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const imported = JSON.parse(ev.target.result);
+      // 简单校验导入存档
+      const keys = ["level","exp","expNeed","hunger","mood","lastActive","isPlaying"];
+      for(let k of keys){
+        if(!(k in imported)) throw new Error("存档格式不对");
+      }
+      data = imported;
+      saveData(data);
+      render();
+      alert("✅ 存档导入成功！");
+      closeSaveModal();
+    }catch(err){
+      alert("❌ 存档文件无效，导入失败");
+    }
+  }
+  reader.readAsText(f);
+  fileInput.value = "";
+}
 
 // 点击团子抖动
 function petClick(){
@@ -199,7 +356,7 @@ function autoDecay(){
   data.hunger = Math.max(0, data.hunger - sub);
   data.mood = Math.max(0, data.mood - sub);
   data.lastActive = Date.now();
-  save();
+  saveData(data);
   render();
 }
 
@@ -213,13 +370,13 @@ function checkState() {
     statusText.innerText = "呜呜，快来陪陪我";
   } else if (data.hunger <= 30) {
     petImg.src = imgList.hungry;
-    statusText.innerText = "肚子饿饿，想吃东西";
+    statusText.innerText = "肚子咕咕叫啦";
   } else if (data.mood >= 85) {
     petImg.src = imgList.happy;
     statusText.innerText = "超开心！🥳";
   } else if (data.hunger >= 75 && data.mood >= 75 && (Date.now() - data.lastActive) > 60000) {
     petImg.src = imgList.sleep;
-    statusText.innerText = "睡着了，轻轻不要吵";
+    statusText.innerText = "呼呼睡觉中💤";
   } else {
     petImg.src = imgList.normal;
     statusText.innerText = "乖乖待着哦~";
@@ -234,16 +391,13 @@ function render(){
   checkState();
 }
 
-function save(){
-  localStorage.setItem('mushroomPetData', JSON.stringify(data));
-}
-
 // 喂食
 function feed(){
   data.hunger = Math.min(100, data.hunger + 20);
   addExp(15);
   data.lastActive = Date.now();
-  save();render();
+  saveData(data);
+  render();
 }
 
 // 抚摸：触发play状态2秒
@@ -252,12 +406,11 @@ function pet(){
   addExp(12);
   data.lastActive = Date.now();
   data.isPlaying = true;
-  save();
+  saveData(data);
   render();
-  // 2秒后退出玩耍状态
   setTimeout(() => {
     data.isPlaying = false;
-    save();
+    saveData(data);
     render();
   }, 2000);
 }
@@ -269,21 +422,24 @@ function addExp(num){
     data.exp -= data.expNeed;
     data.level +=1;
     data.expNeed = Math.floor(data.expNeed *1.35);
-    modal.style.display="flex";
+    levelUpModal.style.display="flex";
   }
+  saveData(data);
 }
-function closeModal(){
-  modal.style.display="none";
+function closeLevelModal(){
+  levelUpModal.style.display="none";
 }
 // 重置宠物
 function resetPet(){
   if(confirm("确定重置蘑菇团子？所有等级进度清空！")){
-    localStorage.removeItem('mushroomPetData');
-    data = {level:1,exp:0,expNeed:100,hunger:80,mood:80,lastActive:Date.now(),isPlaying:false};
+    data = {...defaultData};
+    saveData(data);
     render();
   }
 }
 
+// 初始化
+checkGuide();
 render();
 setInterval(autoDecay, 5000);
 </script>
