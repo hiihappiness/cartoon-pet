@@ -129,32 +129,41 @@ function toggleSound(){
   soundEnable = !soundEnable;
   document.getElementById('soundBtn').innerText = soundEnable ? "🔊音效开" : "🔇音效关";
 }
-// ===================== PWA serviceWorker =====================
+// ===================== PWA serviceWorker 【修复：移除注册url?v参数】 =====================
 let newWorker = null;
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register(`./service-worker.js?v=${SW_TAG}`).then(reg => {
+  navigator.serviceWorker.register(`./service-worker.js`).then(reg => {
     reg.addEventListener('updatefound', () => {
       newWorker = reg.installing;
+      if(!newWorker) return;
       newWorker.addEventListener('statechange', () => {
         if (newWorker.state === 'waiting') {
-          if (confirm("🍄发现新版本，刷新更新？")) {
+          if (confirm("🍄检测到新版本，确认立即更新并刷新页面？")) {
             newWorker.postMessage({ type: 'SKIP_WAITING' });
+            newWorker.addEventListener('statechange',()=>{
+              if(newWorker.state === "activated"){
+                location.reload();
+              }
+            })
           }
         }
       })
     })
   })
 }
-function checkUpdate() {
+async function checkUpdate() {
   if(!navigator.serviceWorker){
     alert("当前环境不支持PWA更新");
     return;
   }
-  navigator.serviceWorker.getRegistration().then(reg=>{
-    if(!reg){ alert("无注册服务"); return; }
-    reg.update();
-    alert("✅ 已检查更新，有新版本会自动加载");
-  })
+  const reg = await navigator.serviceWorker.getRegistration();
+  if(!reg){ alert("无注册服务"); return; }
+  try{
+    await reg.update();
+    alert("✅当前已经是最新版本");
+  }catch(err){
+    alert("⚠️更新检查失败，请稍后重试");
+  }
 }
 const defaultData = {
   petName:"团子",
@@ -866,6 +875,5 @@ window.closeLevelModal = closeLevelModal;
 window.closeGuideModal = closeGuideModal;
 window.renamePet = renamePet;
 window.switchBackpackTab = switchBackpackTab;
-
 checkGuide();
 render();
