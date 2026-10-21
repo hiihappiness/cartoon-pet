@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>卡通电子宠物</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#fff8e8">
+<style>
+*{
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+body{
+  background-color: #fff8e8;
+  padding: 24px 16px;
+  text-align: center;
+}
+.wrap{
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 28px 20px;
+  max-width: 440px;
+  margin: 0 auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+h2{
+  color: #55423d;
+  margin-bottom:8px;
+}
+.level-text{
+  color:#9966cc;
+  font-weight:bold;
+  margin-bottom:12px;
+  font-size:16px;
+}
+.pet-img{
+  width: 220px;
+  height: 220px;
+  margin: 8px auto;
+  object-fit: contain;
+}
+.status-item{
+  text-align: left;
+  margin:12px 8px;
+  color:#444;
+}
+.bar-bg{
+  width:100%;
+  height:20px;
+  background:#eee;
+  border-radius:10px;
+  overflow:hidden;
+  margin-top:4px;
+}
+.bar-fill{
+  height:100%;
+  border-radius:10px;
+  transition: 0.4s ease;
+}
+.hp{background:#ff7b7b;}
+.hunger{background:#ffb366;}
+.mood{background:#7ccd7c;}
+.exp{background:#b892ff;}
+.tip-text{
+  margin:16px 0;
+  font-size:17px;
+  color:#664422;
+  min-height:24px;
+}
+.btn-group{
+  margin-top:12px;
+}
+.btn{
+  border:none;
+  border-radius:14px;
+  padding:13px 20px;
+  font-size:16px;
+  color:white;
+  margin:6px;
+  cursor:pointer;
+}
+.btn-feed{background:#ff9c4a;}
+.btn-play{background:#68b8ff;}
+.btn-clean{background:#8dd8a0;}
+.btn-reset{background:#b892ff;}
+/* 升级弹窗 */
+.modal{
+  display:none;
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,0.4);
+  align-items:center;
+  justify-content:center;
+  z-index:99;
+}
+.modal-box{
+  background:#fff;
+  padding:30px;
+  border-radius:20px;
+  max-width:320px;
+}
+.modal h3{color:#b892ff;margin-bottom:12px;}
+.modal button{
+  margin-top:16px;
+  border:none;
+  padding:10px 24px;
+  border-radius:12px;
+  background:#b892ff;
+  color:white;
+  font-size:16px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>我的卡通小宠物</h2>
+  <div class="level-text" id="levelInfo">Lv.1</div>
+  <img id="petImg" class="pet-img" alt="宠物">
+
+  <div class="status-item">
+    ❤️ 生命值
+    <div class="bar-bg"><div id="hpBar" class="bar-fill hp"></div></div>
+  </div>
+  <div class="status-item">
+    🍖 饥饿值
+    <div class="bar-bg"><div id="hungerBar" class="bar-fill hunger"></div></div>
+  </div>
+  <div class="status-item">
+    😊 心情值
+    <div class="bar-bg"><div id="moodBar" class="bar-fill mood"></div></div>
+  </div>
+  <div class="status-item">
+    ✨ 经验值
+    <div class="bar-bg"><div id="expBar" class="bar-fill exp"></div></div>
+  </div>
+
+  <div class="tip-text" id="tip">宠物醒啦，快来陪陪它！</div>
+
+  <div class="btn-group">
+    <button class="btn btn-feed" onclick="feed()">🍖 喂食</button>
+    <button class="btn btn-play" onclick="play()">🎮 玩耍</button>
+    <button class="btn btn-clean" onclick="clean()">🛁 洗澡</button>
+    <button class="btn btn-reset" onclick="resetPet()">🔄 重新领养</button>
+  </div>
+</div>
+
+<!-- 升级弹窗 -->
+<div class="modal" id="levelModal">
+  <div class="modal-box">
+    <h3>🎉 升级啦！</h3>
+    <p id="modalText"></p>
+    <button onclick="closeModal()">太棒啦</button>
+  </div>
+</div>
+
+<script>
+// 注册Service Worker，实现离线缓存
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js');
+}
+
+const petPic = {
+  normal: "https://p3-flow-image-sign.byteimg.com/tos-cn-i-a9rns2rl98/41010101399440889110012200421111~tplv-a9rns2rl98-image.image",
+  happy: "https://p3-flow-image-sign.byteimg.com/tos-cn-i-a9rns2rl98/41020101399440889110012200421111~tplv-a9rns2rl98-image.image",
+  hungry: "https://p3-flow-image-sign.byteimg.com/tos-cn-i-a9rns2rl98/41030101399440889110012200421111~tplv-a9rns2rl98-image.image",
+  weak: "https://p3-flow-image-sign.byteimg.com/tos-cn-i-a9rns2rl98/41040101399440889110012200421111~tplv-a9rns2rl98-image.image"
+};
+
+// 读取存档，新增等级、经验字段
+let pet = JSON.parse(localStorage.getItem("cartoonPet")) || {
+  hp: 100,
+  hunger: 80,
+  mood: 80,
+  level: 1,
+  exp: 0,
+  lastTime: Date.now()
+};
+
+const decay = {
+  hunger: 3,
+  mood: 2
+};
+
+// 获取当前等级升级所需经验（等级越高，需要越多）
+function getExpNeed(lv){
+  return lv * 50;
+}
+
+// 检查升级
+function checkLevelUp(){
+  const need = getExpNeed(pet.level);
+  if(pet.exp >= need){
+    pet.exp -= need;
+    pet.level += 1;
+    // 弹出升级提示
+    document.getElementById("modalText").innerText = `你的宠物升到 Lv.${pet.level} 啦！`;
+    document.getElementById("levelModal").style.display = "flex";
+  }
+}
+function closeModal(){
+  document.getElementById("levelModal").style.display = "none";
+}
+
+function calcOffline(){
+  const now = Date.now();
+  const passMin = (now - pet.lastTime) / 1000 / 60;
+  pet.hunger = Math.max(0, pet.hunger - decay.hunger * passMin);
+  pet.mood = Math.max(0, pet.mood - decay.mood * passMin);
+  if(pet.hunger <= 0){
+    pet.hp = Math.max(0, pet.hp - passMin * 1.8);
+  }
+  pet.lastTime = now;
+  save();
+}
+
+function save(){
+  localStorage.setItem("cartoonPet", JSON.stringify(pet));
+}
+
+function resetPet(){
+  pet = {
+    hp: 100,
+    hunger: 80,
+    mood: 80,
+    level: 1,
+    exp: 0,
+    lastTime: Date.now()
+  };
+  save();
+  render();
+}
+
+function render(){
+  document.getElementById("hpBar").style.width = pet.hp + "%";
+  document.getElementById("hungerBar").style.width = pet.hunger + "%";
+  document.getElementById("moodBar").style.width = pet.mood + "%";
+  const need = getExpNeed(pet.level);
+  const expPercent = (pet.exp / need) * 100;
+  document.getElementById("expBar").style.width = expPercent + "%";
+  document.getElementById("levelInfo").innerText = `Lv.${pet.level}`;
+
+  let tip;
+  let imgSrc;
+  if(pet.hp <= 0){
+    tip = "呜，宠物睡着了，点【重新领养】来一只新的小家伙";
+    imgSrc = petPic.weak;
+  }else if(pet.hunger < 20){
+    tip = "肚子咕咕叫！快喂点吃的🥺";
+    imgSrc = petPic.hungry;
+  }else if(pet.mood < 20){
+    tip = "好无聊，陪我玩一会吧";
+    imgSrc = petPic.weak;
+  }else if(pet.mood > 85 && pet.hunger >70){
+    tip = "超级开心！🥰";
+    imgSrc = petPic.happy;
+  }else{
+    tip = "乖乖待着~";
+    imgSrc = petPic.normal;
+  }
+  document.getElementById("tip").innerText = tip;
+  document.getElementById("petImg").src = imgSrc;
+}
+
+function feed(){
+  if(pet.hp <= 0) return;
+  pet.hunger = Math.min(100, pet.hunger + 26);
+  pet.exp += 8;
+  checkLevelUp();
+  save(); render();
+}
+function play(){
+  if(pet.hp <= 0) return;
+  pet.mood = Math.min(100, pet.mood + 28);
+  pet.exp +=12;
+  checkLevelUp();
+  save(); render();
+}
+function clean(){
+  if(pet.hp <= 0) return;
+  pet.mood = Math.min(100, pet.mood + 12);
+  pet.hunger = Math.max(0, pet.hunger - 4);
+  pet.exp +=6;
+  checkLevelUp();
+  save(); render();
+}
+
+calcOffline();
+render();
+
+setInterval(()=>{
+  pet.lastTime = Date.now();
+  pet.hunger = Math.max(0, pet.hunger - decay.hunger / 60);
+  pet.mood = Math.max(0, pet.mood - decay.mood / 60);
+  if(pet.hunger <=0) pet.hp = Math.max(0, pet.hp - 0.03);
+  save(); render();
+},1000);
+</script>
+</body>
+</html>
