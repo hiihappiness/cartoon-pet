@@ -19,8 +19,13 @@ body{
 .title{
   font-size:22px;
   color:#d84444;
-  margin-bottom:16px;
+  margin-bottom:8px;
   font-weight:bold;
+}
+.version-text{
+  font-size:12px;
+  color:#888;
+  margin-bottom:16px;
 }
 .pet-wrap{
   width:280px;
@@ -154,6 +159,7 @@ input[type="file"]{
 </head>
 <body>
 <div class="title">🍄 蘑菇团子</div>
+<div class="version-text">版本 v<span id="verShow">1.1</span></div>
 <div class="pet-wrap">
   <img id="petImg" alt="蘑菇团子" onclick="petClick()">
 </div>
@@ -178,6 +184,7 @@ input[type="file"]{
   </div>
   <div class="btn-group-row">
     <button onclick="openSaveModal()">💾存档</button>
+    <button onclick="checkUpdate()">🔃检查更新</button>
     <button onclick="resetPet()" class="btn-gray">🔄重置</button>
   </div>
   <div class="tip"><span id="statusText">乖乖待着哦~</span></div>
@@ -222,9 +229,44 @@ input[type="file"]{
 </div>
 
 <script>
-// 注册Service Worker（开启PWA离线）
+// 版本控制：major主版本（改动SW、全套资源更新） minor小版本（微调、bug修复，不改SW）
+const APP_VERSION = {
+  major: 1,
+  minor: 1
+};
+document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
+const SW_TAG = APP_VERSION.major;
+
+let newWorker = null;
+// 注册SW，只绑定主版本，小版本变动不动这里！
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./service-worker.js");
+  navigator.serviceWorker.register(`./service-worker.js?v=${SW_TAG}`).then(reg => {
+    reg.addEventListener('updatefound', () => {
+      newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'waiting') {
+          if (confirm("🍄发现大版本更新，将刷新全部资源，确定更新？")) {
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
+          }
+        }
+      })
+    })
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
+  });
+}
+
+// 检查更新
+function checkUpdate() {
+  navigator.serviceWorker.getRegistration().then(reg => {
+    if (!reg) {
+      alert("当前环境不支持PWA更新");
+      return;
+    }
+    reg.update();
+    alert("✅ 已检查，当前已是最新版本（小修改刷新页面即可加载）");
+  })
 }
 
 const imgList = {
