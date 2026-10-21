@@ -877,3 +877,9 @@ window.renamePet = renamePet;
 window.switchBackpackTab = switchBackpackTab;
 checkGuide();
 render();
+// 同步团子名字到页面标题 + 浏览器标签
+const pageTitleEl = document.querySelector('#pageTitle span');
+const docTitleEl = document.getElementById('docTitle');
+if(pageTitleEl) pageTitleEl.innerText = data.petName;
+if(docTitleEl) docTitleEl.textContent = `🍄${data.petName}电子宠物`;
+
