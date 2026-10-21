@@ -39,7 +39,30 @@ body{
   width:240px;
   height:240px;
   object-fit:contain;
-  transition: all 0.3s ease;
+  transition: transform 0.25s ease;
+}
+/* 团子动画 */
+@keyframes bounce {
+  0%,100%{transform: translateY(0)}
+  50%{transform: translateY(-18px)}
+}
+@keyframes chew {
+  0%,100%{transform: scale(1)}
+  50%{transform: scale(1.12)}
+}
+@keyframes shyShake {
+  0%,100%{transform: rotate(0deg)}
+  25%{transform: rotate(-3deg)}
+  75%{transform: rotate(3deg)}
+}
+.bounce-anim{
+  animation: bounce 0.45s ease-in-out;
+}
+.chew-anim{
+  animation: chew 0.35s ease-in-out;
+}
+.shy-anim{
+  animation: shyShake 0.4s ease-in-out;
 }
 .info-box{
   width:100%;
@@ -102,7 +125,6 @@ button:active{background:#c43c3c}
   color:#777;
   text-align:center;
 }
-/* 弹窗通用样式 */
 .modal{
   position:fixed;
   inset:0;
@@ -130,14 +152,26 @@ button:active{background:#c43c3c}
   display:flex;
   gap:10px;
 }
-/* 点击团子抖动动画 */
-@keyframes shake {
-  0%,100%{transform:rotate(0deg)}
-  25%{transform:rotate(-4deg)}
-  75%{transform:rotate(4deg)}
+.backpack-grid{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:10px;
+  margin:12px 0;
 }
-.shake{
-  animation: shake 0.3s ease-in-out;
+.item-card{
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:10px 6px;
+}
+.item-name{font-size:14px;font-weight:bold}
+.item-desc{font-size:11px;color:#666;margin:4px 0}
+.item-num{font-size:13px;color:#d84444}
+.claim-info{
+  margin:10px 0;
+  padding:8px;
+  background:#f8f8f8;
+  border-radius:8px;
+  font-size:14px;
 }
 input[type="file"]{
   display:none;
@@ -159,7 +193,7 @@ input[type="file"]{
 </head>
 <body>
 <div class="title">🍄 蘑菇团子</div>
-<div class="version-text">版本 v<span id="verShow">1.1</span></div>
+<div class="version-text">版本 v<span id="verShow">1.4</span></div>
 <div class="pet-wrap">
   <img id="petImg" alt="蘑菇团子" onclick="petClick()">
 </div>
@@ -179,7 +213,7 @@ input[type="file"]{
     <div class="bar-bg"><div class="bar-fill" id="moodBar" style="width:80%"></div></div>
   </div>
   <div class="btn-group">
-    <button onclick="feed()">🍚喂食</button>
+    <button onclick="openBackpack()">🎒背包</button>
     <button onclick="pet()">🤲抚摸</button>
   </div>
   <div class="btn-group-row">
@@ -196,6 +230,21 @@ input[type="file"]{
     <h3>🎉升级啦！</h3>
     <p>蘑菇团子等级提升</p>
     <button onclick="closeLevelModal()">知道啦</button>
+  </div>
+</div>
+
+<!-- 背包弹窗 -->
+<div class="modal" id="backpackModal">
+  <div class="modal-content">
+    <h3>🎒食物背包</h3>
+    <div class="claim-info">
+      <div>可领取口粮：<span id="canClaim">0</span> 份</div>
+      <button onclick="claimGrain()" style="margin-top:6px">✅一键领取</button>
+    </div>
+    <div class="backpack-grid" id="backpackList"></div>
+    <div class="modal-btn-wrap">
+      <button onclick="closeBackpack()" class="btn-gray">关闭</button>
+    </div>
   </div>
 </div>
 
@@ -219,7 +268,7 @@ input[type="file"]{
 <div class="modal" id="guideModal">
   <div class="modal-content">
     <h3>🍄欢迎来到蘑菇团子</h3>
-    <p>✅ 喂食：增加饱食度，团子不会饿肚子<br>✅ 抚摸：提升团子心情<br>⚠️ 饱食、心情会随时间慢慢下降<br>💡 闲置一段时间，团子会自己睡觉休息<br>💾 记得定期【存档备份】防止进度丢失</p>
+    <p>✅ 打开背包选择食物投喂团子<br>✅ 口粮每60秒自动产出一份，记得领取<br>✅ 多点抚摸团子，它会开心蹦跳<br>✅ 饱食、心情会随时间慢慢下降<br>💾 记得定期【存档备份】防止进度丢失</p>
     <div class="check-wrap">
       <input type="checkbox" id="noMoreGuide">
       <label for="noMoreGuide">不再弹出此引导</label>
@@ -229,16 +278,19 @@ input[type="file"]{
 </div>
 
 <script>
-// 版本控制：major主版本（改动SW、全套资源更新） minor小版本（微调、bug修复，不改SW）
 const APP_VERSION = {
   major: 1,
-  minor: 1
+  minor: 4
 };
 document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 const SW_TAG = APP_VERSION.major;
-
+const FOOD_CONFIG = [
+  {id:"grain", name:"口粮", desc:"饱食+20，经验+15", addHunger:20, addMood:0, addExp:15},
+  {id:"cookie", name:"小饼干", desc:"饱食+12，心情+30，经验+10", addHunger:12, addMood:30, addExp:10},
+  {id:"fruit", name:"水果", desc:"饱食+16，心情+15，经验+20", addHunger:16, addMood:15, addExp:20},
+];
+const GRAIN_INTERVAL = 60 * 1000;
 let newWorker = null;
-// 注册SW，只绑定主版本，小版本变动不动这里！
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register(`./service-worker.js?v=${SW_TAG}`).then(reg => {
     reg.addEventListener('updatefound', () => {
@@ -256,8 +308,6 @@ if ("serviceWorker" in navigator) {
     window.location.reload();
   });
 }
-
-// 检查更新
 function checkUpdate() {
   navigator.serviceWorker.getRegistration().then(reg => {
     if (!reg) {
@@ -268,17 +318,6 @@ function checkUpdate() {
     alert("✅ 已检查，当前已是最新版本（小修改刷新页面即可加载）");
   })
 }
-
-const imgList = {
-  normal: "./normal.png",
-  happy: "./happy.png",
-  hungry: "./hungry.png",
-  sad: "./sad.png",
-  sleep: "./sleep.png",
-  play: "./play.png"
-};
-
-// 默认初始数据
 const defaultData = {
   level:1,
   exp:0,
@@ -286,37 +325,43 @@ const defaultData = {
   hunger:80,
   mood:80,
   lastActive:Date.now(),
-  isPlaying: false
+  isPlaying: false,
+  bag:{
+    grain:5,
+    cookie:3,
+    fruit:3
+  },
+  foodTimer: Date.now(),
+  petTouchCount: 0,
+  lastTouchTime: 0
 };
-
-// ===== 数据容错读取 =====
+function saveData(data){
+  localStorage.setItem('mushroomPetData', JSON.stringify(data));
+}
 function loadData(){
   let raw = localStorage.getItem('mushroomPetData');
   let data;
   if(!raw){
-    data = {...defaultData};
+    data = JSON.parse(JSON.stringify(defaultData));
     saveData(data);
     return data;
   }
   try{
     data = JSON.parse(raw);
-    // 校验必要字段，缺失则重置
-    const keys = ["level","exp","expNeed","hunger","mood","lastActive","isPlaying"];
+    const keys = ["level","exp","expNeed","hunger","mood","lastActive","isPlaying","bag","foodTimer","petTouchCount","lastTouchTime"];
     for(let k of keys){
       if(!(k in data)) throw new Error("字段缺失");
     }
+    if(!data.bag) data.bag = JSON.parse(JSON.stringify(defaultData.bag));
+    if(typeof data.foodTimer !== "number") data.foodTimer = Date.now();
   }catch(e){
     alert("存档数据损坏，已为你重置一只全新蘑菇团子");
-    data = {...defaultData};
+    data = JSON.parse(JSON.stringify(defaultData));
     saveData(data);
   }
   return data;
 }
-function saveData(data){
-  localStorage.setItem('mushroomPetData', JSON.stringify(data));
-}
 let data = loadData();
-
 const petImg = document.getElementById('petImg');
 const levelEl = document.getElementById('level');
 const expBar = document.getElementById('expBar');
@@ -324,11 +369,118 @@ const hungerBar = document.getElementById('hungerBar');
 const moodBar = document.getElementById('moodBar');
 const statusText = document.getElementById('statusText');
 const levelUpModal = document.getElementById('levelUpModal');
+const backpackModal = document.getElementById('backpackModal');
+const backpackList = document.getElementById('backpackList');
+const canClaimEl = document.getElementById("canClaim");
 const saveModal = document.getElementById('saveModal');
 const guideModal = document.getElementById('guideModal');
 const fileInput = document.getElementById('fileInput');
+let animLock = false;
 
-// ===== 新手引导逻辑 =====
+// 抚摸触发蹦跳动画
+function petClick(){
+  if(animLock) return;
+  const now = Date.now();
+  const touchGap = now - data.lastTouchTime;
+  // 2秒内连续抚摸计数
+  if(touchGap < 2000){
+    data.petTouchCount += 1;
+  }else{
+    data.petTouchCount = 1;
+  }
+  data.lastTouchTime = now;
+  saveData(data);
+  animLock = true;
+  if(data.petTouchCount >=3){
+    // 连续抚摸3次，开心蹦跳
+    petImg.classList.add("bounce-anim");
+    setTimeout(()=>{
+      petImg.classList.remove("bounce-anim");
+      animLock = false;
+    },450);
+    data.petTouchCount = 0;
+  }else{
+    petImg.classList.add("shy-anim");
+    setTimeout(()=>{
+      petImg.classList.remove("shy-anim");
+      animLock = false;
+    },400);
+  }
+}
+// 投喂咀嚼动画
+function feedAnim(){
+  if(animLock) return;
+  animLock = true;
+  petImg.classList.add("chew-anim");
+  setTimeout(()=>{
+    petImg.classList.remove("chew-anim");
+    animLock = false;
+  },350);
+}
+function calcCanClaim(){
+  const now = Date.now();
+  const diff = now - data.foodTimer;
+  const count = Math.floor(diff / GRAIN_INTERVAL);
+  return count;
+}
+function updateClaimText(){
+  canClaimEl.innerText = calcCanClaim();
+}
+function claimGrain(){
+  const cnt = calcCanClaim();
+  if(cnt <= 0){
+    alert("暂时还没有口粮可以领取，再等等哦~");
+    return;
+  }
+  data.bag.grain += cnt;
+  const now = Date.now();
+  const diff = now - data.foodTimer;
+  const remainTime = diff % GRAIN_INTERVAL;
+  data.foodTimer = now - remainTime;
+  saveData(data);
+  renderBackpack();
+  updateClaimText();
+  alert(`✅ 领取成功！+${cnt}份口粮`);
+}
+function renderBackpack(){
+  updateClaimText();
+  backpackList.innerHTML = "";
+  FOOD_CONFIG.forEach(food=>{
+    const div = document.createElement("div");
+    div.className = "item-card";
+    div.innerHTML = `
+      <div class="item-name">${food.name}</div>
+      <div class="item-desc">${food.desc}</div>
+      <div class="item-num">数量：${data.bag[food.id]}</div>
+    `;
+    if(data.bag[food.id]>0){
+      div.onclick = ()=>feedWithFood(food);
+    }else{
+      div.style.opacity="0.4";
+    }
+    backpackList.appendChild(div);
+  })
+}
+function openBackpack(){
+  renderBackpack();
+  backpackModal.style.display="flex";
+}
+function closeBackpack(){
+  backpackModal.style.display="none";
+}
+function feedWithFood(food){
+  if(data.bag[food.id] <= 0) return;
+  feedAnim();
+  data.bag[food.id]--;
+  data.hunger = Math.min(100, data.hunger + food.addHunger);
+  data.mood = Math.min(100, data.mood + food.addMood);
+  addExp(food.addExp);
+  data.lastActive = Date.now();
+  saveData(data);
+  render();
+  renderBackpack();
+  closeBackpack();
+}
 function checkGuide(){
   const hide = localStorage.getItem("hideGuide");
   if(hide !== "1"){
@@ -342,8 +494,6 @@ function closeGuideModal(){
   }
   guideModal.style.display = "none";
 }
-
-// ===== 存档导出导入 =====
 function openSaveModal(){
   saveModal.style.display = "flex";
 }
@@ -367,8 +517,7 @@ fileInput.onchange = function(e){
   reader.onload = function(ev){
     try{
       const imported = JSON.parse(ev.target.result);
-      // 简单校验导入存档
-      const keys = ["level","exp","expNeed","hunger","mood","lastActive","isPlaying"];
+      const keys = ["level","exp","expNeed","hunger","mood","lastActive","isPlaying","bag","foodTimer","petTouchCount","lastTouchTime"];
       for(let k of keys){
         if(!(k in imported)) throw new Error("存档格式不对");
       }
@@ -384,14 +533,9 @@ fileInput.onchange = function(e){
   reader.readAsText(f);
   fileInput.value = "";
 }
-
-// 点击团子抖动
-function petClick(){
-  petImg.classList.add('shake');
-  setTimeout(()=>petImg.classList.remove('shake'),300);
+function pet(){
+  petClick();
 }
-
-// 自动衰减饱食、心情
 function autoDecay(){
   const gap = (Date.now() - data.lastActive)/1000;
   const sub = Math.floor(gap / 30);
@@ -401,30 +545,33 @@ function autoDecay(){
   saveData(data);
   render();
 }
-
-// 状态判断逻辑
 function checkState() {
   if (data.isPlaying) {
-    petImg.src = imgList.play;
+    petImg.src = "./play.png";
     statusText.innerText = "玩得好开心！🥰";
   } else if (data.hunger <= 15 || data.mood <= 15) {
-    petImg.src = imgList.sad;
+    petImg.src = "./sad.png";
     statusText.innerText = "呜呜，快来陪陪我";
   } else if (data.hunger <= 30) {
-    petImg.src = imgList.hungry;
+    petImg.src = "./hungry.png";
     statusText.innerText = "肚子咕咕叫啦";
   } else if (data.mood >= 85) {
-    petImg.src = imgList.happy;
+    petImg.src = "./happy.png";
     statusText.innerText = "超开心！🥳";
+  } else if (data.mood < 30 && data.hunger > 40) {
+    petImg.src = "./shy.png";
+    statusText.innerText = "有点害羞啦 😳";
+  } else if (data.hunger >= 70 && data.mood >= 40 && (Date.now() - data.lastActive) > 80000) {
+    petImg.src = "./bored.png";
+    statusText.innerText = "有点无聊，陪陪我吧";
   } else if (data.hunger >= 75 && data.mood >= 75 && (Date.now() - data.lastActive) > 60000) {
-    petImg.src = imgList.sleep;
+    petImg.src = "./sleep.png";
     statusText.innerText = "呼呼睡觉中💤";
   } else {
-    petImg.src = imgList.normal;
+    petImg.src = "./normal.png";
     statusText.innerText = "乖乖待着哦~";
   }
 }
-
 function render(){
   levelEl.innerText = data.level;
   expBar.style.width = (data.exp / data.expNeed *100)+"%";
@@ -432,32 +579,6 @@ function render(){
   moodBar.style.width = data.mood+"%";
   checkState();
 }
-
-// 喂食
-function feed(){
-  data.hunger = Math.min(100, data.hunger + 20);
-  addExp(15);
-  data.lastActive = Date.now();
-  saveData(data);
-  render();
-}
-
-// 抚摸：触发play状态2秒
-function pet(){
-  data.mood = Math.min(100, data.mood + 22);
-  addExp(12);
-  data.lastActive = Date.now();
-  data.isPlaying = true;
-  saveData(data);
-  render();
-  setTimeout(() => {
-    data.isPlaying = false;
-    saveData(data);
-    render();
-  }, 2000);
-}
-
-// 升级逻辑
 function addExp(num){
   data.exp += num;
   if(data.exp >= data.expNeed){
@@ -471,16 +592,13 @@ function addExp(num){
 function closeLevelModal(){
   levelUpModal.style.display="none";
 }
-// 重置宠物
 function resetPet(){
-  if(confirm("确定重置蘑菇团子？所有等级进度清空！")){
-    data = {...defaultData};
+  if(confirm("确定重置蘑菇团子？所有等级、背包物品、计时全部清空！")){
+    data = JSON.parse(JSON.stringify(defaultData));
     saveData(data);
     render();
   }
 }
-
-// 初始化
 checkGuide();
 render();
 setInterval(autoDecay, 5000);
