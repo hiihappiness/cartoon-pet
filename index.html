@@ -15,6 +15,10 @@ body{
   flex-direction:column;
   align-items:center;
   padding:20px 16px;
+  transition: background 1s;
+}
+body.night{
+  background:#222638;
 }
 .title{
   font-size:22px;
@@ -34,6 +38,26 @@ body{
   align-items:center;
   justify-content:center;
   margin-bottom:16px;
+  position:relative;
+}
+/* 对话气泡 */
+.talk-bubble{
+  position:absolute;
+  top:-20px;
+  left:50%;
+  transform: translateX(-50%);
+  background:#fff;
+  padding:6px 10px;
+  border-radius:12px;
+  font-size:14px;
+  color:#333;
+  box-shadow:0 2px 6px rgba(0,0,0,0.15);
+  opacity:0;
+  transition: opacity 0.6s;
+  pointer-events:none;
+  z-index:10;
+  max-width:160px;
+  text-align:center;
 }
 #petImg{
   width:240px;
@@ -72,6 +96,10 @@ body{
   padding:16px;
   box-shadow:0 2px 10px #f2d6d6;
   margin-bottom:16px;
+  transition: background 1s;
+}
+body.night .info-box{
+  background:#2f344c;
 }
 .row{
   display:flex;
@@ -79,6 +107,9 @@ body{
   margin:8px 0;
   font-size:15px;
   color:#333;
+}
+body.night .row{
+  color:#eee;
 }
 .bar-bg{
   width:120px;
@@ -125,10 +156,13 @@ button:active{background:#c43c3c}
   color:#777;
   text-align:center;
 }
+body.night .tip{
+  color:#bbb;
+}
 .modal{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.4);
+  background:rgba(0,0,0,0.55);
   display:none;
   align-items:center;
   justify-content:center;
@@ -142,6 +176,10 @@ button:active{background:#c43c3c}
   text-align:center;
   max-width:320px;
   width:100%;
+  transition: background 1s;
+}
+body.night .modal-content{
+  background:#2f344c;
 }
 .modal-content p{
   margin:10px 0 16px;
@@ -155,23 +193,41 @@ button:active{background:#c43c3c}
 .backpack-grid{
   display:grid;
   grid-template-columns: repeat(3, 1fr);
-  gap:10px;
+  gap:12px;
   margin:12px 0;
 }
 .item-card{
   border:1px solid #ddd;
-  border-radius:10px;
-  padding:10px 6px;
+  border-radius:12px;
+  padding:12px 8px;
+  cursor:pointer;
+  transition:0.2s;
+}
+.item-card:hover{
+  transform: translateY(-3px);
+  box-shadow:0 3px 8px rgba(0,0,0,0.12);
+}
+.item-card.can-use{
+  border-color:#ff9999;
+  background:#fff7f7;
+}
+.item-card.disabled{
+  opacity:0.45;
+  cursor:not-allowed;
 }
 .item-name{font-size:14px;font-weight:bold}
 .item-desc{font-size:11px;color:#666;margin:4px 0}
-.item-num{font-size:13px;color:#d84444}
+.item-num{font-size:13px;color:#d84444;font-weight:bold}
 .claim-info{
   margin:10px 0;
   padding:8px;
   background:#f8f8f8;
   border-radius:8px;
   font-size:14px;
+}
+body.night .claim-info{
+  background:#404660;
+  color:#eee;
 }
 /* 游戏弹窗 */
 .game-area{
@@ -216,13 +272,14 @@ input[type="file"]{
 </head>
 <body>
 <div class="title">🍄 蘑菇团子</div>
-<div class="version-text">版本 v<span id="verShow">1.5</span></div>
+<div class="version-text">版本 v<span id="verShow">1.7</span></div>
 <div class="pet-wrap">
+  <div class="talk-bubble" id="talkBubble"></div>
   <img id="petImg" alt="蘑菇团子" onclick="petClick()">
 </div>
 
 <div class="info-box">
-  <div class="row">等级：<span id="level">1</span></div>
+  <div class="row">等级：<span id="level">1</span>｜<button id="soundBtn" onclick="toggleSound()">🔊音效开</button></div>
   <div class="row exp">
     <span>经验</span>
     <div class="bar-bg"><div class="bar-fill" id="expBar" style="width:0%"></div></div>
@@ -278,7 +335,7 @@ input[type="file"]{
     <h3>🎮泡泡小游戏</h3>
     <p id="gameTip">点击泡泡得分！限时30秒</p>
     <div class="game-area" id="gameArea"></div>
-    <p>得分：<span id="gameScore">0</span></p>
+    <p>得分：<span id="gameScore">0</span>｜剩余：<span id="gameTimerText">30</span>秒</p>
     <div class="modal-btn-wrap">
       <button onclick="startGame()">开始游戏</button>
       <button onclick="closeGame()" class="btn-gray">关闭</button>
@@ -306,7 +363,7 @@ input[type="file"]{
 <div class="modal" id="guideModal">
   <div class="modal-content">
     <h3>🍄欢迎来到蘑菇团子</h3>
-    <p>✅ 打开背包选择食物投喂团子<br>✅ 口粮每60秒自动产出一份，记得领取<br>✅ 多点抚摸团子，它会开心蹦跳<br>✅ 玩泡泡小游戏赢零食奖励<br>✅ 饱食、心情会随时间慢慢下降<br>💾 记得定期【存档备份】防止进度丢失</p>
+    <p>✅ 点击团子可以和它对话<br>✅ 投喂食物提升饱食和心情<br>✅ 夜晚团子会睡觉，消耗变慢<br>✅ 玩泡泡小游戏赢零食奖励<br>💾 记得定期【存档备份】防止进度丢失</p>
     <div class="check-wrap">
       <input type="checkbox" id="noMoreGuide">
       <label for="noMoreGuide">不再弹出此引导</label>
@@ -318,16 +375,93 @@ input[type="file"]{
 <script>
 const APP_VERSION = {
   major: 1,
-  minor: 5
+  minor: 7
 };
 document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 const SW_TAG = APP_VERSION.major;
 const FOOD_CONFIG = [
-  {id:"grain", name:"口粮", desc:"饱食+20，经验+15", addHunger:20, addMood:0, addExp:15},
-  {id:"cookie", name:"小饼干", desc:"饱食+12，心情+30，经验+10", addHunger:12, addMood:30, addExp:10},
-  {id:"fruit", name:"水果", desc:"饱食+16，心情+15，经验+20", addHunger:16, addMood:15, addExp:20},
+  {id:"grain", name:"口粮", desc:"基础食物，饱食+20，经验+15", addHunger:20, addMood:0, addExp:15},
+  {id:"cookie", name:"小饼干", desc:"美味点心，饱食+12，心情+30，经验+10", addHunger:12, addMood:30, addExp:10},
+  {id:"fruit", name:"水果", desc:"新鲜水果，饱食+16，心情+15，经验+20", addHunger:16, addMood:15, addExp:20},
 ];
 const GRAIN_INTERVAL = 60 * 1000;
+const DAY_START = 7;
+const NIGHT_START = 21;
+// 台词
+const TALK_LIST_DAY = [
+  "今天天气不错~",
+  "摸摸我吧！",
+  "想吃好吃的~",
+  "陪我玩好不好",
+  "嘿嘿🥰",
+  "今天很开心！",
+  "快喂我吃东西",
+  "我在这里哦"
+];
+const TALK_LIST_NIGHT = [
+  "好困哦...",
+  "晚安啦...zzz",
+  "好想睡觉",
+  "嘘，小声一点",
+  "让我休息一会",
+  "梦里有好吃的"
+];
+
+// ======= 音效模块：WebAudio 内置合成，无外部音频 =======
+let audioCtx = null;
+let soundEnable = true;
+function initAudio(){
+  if(audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playTone(freq, duration, type='sine', vol=0.2){
+  if(!soundEnable || !audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+// 抚摸音效（短促叮咚）
+function soundTap(){
+  initAudio();
+  playTone(620, 0.12, 'sine', 0.22);
+}
+// 投喂吃东西音效
+function soundFeed(){
+  initAudio();
+  playTone(440,0.15,'sine',0.2);
+  setTimeout(()=>playTone(520,0.15,'sine',0.18),80);
+}
+// 升级音效（上升音阶）
+function soundLevelUp(){
+  initAudio();
+  playTone(520,0.14,'sine',0.22);
+  setTimeout(()=>playTone(660,0.14,'sine',0.22),120);
+  setTimeout(()=>playTone(880,0.22,'sine',0.25),240);
+}
+// 游戏得分单个泡泡
+function soundGameHit(){
+  initAudio();
+  playTone(800,0.09,'square',0.14);
+}
+// 游戏结束结算音效
+function soundGameEnd(){
+  initAudio();
+  playTone(580,0.15,'sine',0.2);
+  setTimeout(()=>playTone(480,0.2,'sine',0.2),120);
+}
+function toggleSound(){
+  soundEnable = !soundEnable;
+  document.getElementById('soundBtn').innerText = soundEnable ? "🔊音效开" : "🔇音效关";
+}
+// ======================================================
+
 let newWorker = null;
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register(`./service-worker.js?v=${SW_TAG}`).then(reg => {
@@ -372,7 +506,7 @@ const defaultData = {
   foodTimer: Date.now(),
   petTouchCount: 0,
   lastTouchTime: 0,
-  gameCd:0 //游戏冷却时间戳
+  gameCd:0
 };
 function saveData(data){
   localStorage.setItem('mushroomPetData', JSON.stringify(data));
@@ -417,19 +551,40 @@ const fileInput = document.getElementById('fileInput');
 const gameModal = document.getElementById("gameModal");
 const gameArea = document.getElementById("gameArea");
 const gameScoreEl = document.getElementById("gameScore");
+const gameTimerText = document.getElementById("gameTimerText");
 const gameTipEl = document.getElementById("gameTip");
+const talkBubble = document.getElementById("talkBubble");
 let animLock = false;
-let gameTimer = null;
-let bubbleTimer = null;
+let gameMainTimer = null;
+let bubbleSpawnTimer = null;
 let score = 0;
 let gameRunning = false;
+let remainTime = 30;
 
-// 抚摸触发蹦跳动画
+function isNightTime(){
+  const h = new Date().getHours();
+  return h >= NIGHT_START || h < DAY_START;
+}
+function showTalk(){
+  const bubble = talkBubble;
+  let txt;
+  if(isNightTime()){
+    txt = TALK_LIST_NIGHT[Math.floor(Math.random() * TALK_LIST_NIGHT.length)];
+  }else{
+    txt = TALK_LIST_DAY[Math.floor(Math.random() * TALK_LIST_DAY.length)];
+  }
+  bubble.innerText = txt;
+  bubble.style.opacity = "1";
+  setTimeout(()=>{
+    bubble.style.opacity = "0";
+  }, 2200);
+}
 function petClick(){
+  soundTap();
+  showTalk();
   if(animLock) return;
   const now = Date.now();
   const touchGap = now - data.lastTouchTime;
-  // 2秒内连续抚摸计数
   if(touchGap < 2000){
     data.petTouchCount += 1;
   }else{
@@ -439,7 +594,6 @@ function petClick(){
   saveData(data);
   animLock = true;
   if(data.petTouchCount >=3){
-    // 连续抚摸3次，开心蹦跳
     petImg.classList.add("bounce-anim");
     setTimeout(()=>{
       petImg.classList.remove("bounce-anim");
@@ -454,8 +608,8 @@ function petClick(){
     },400);
   }
 }
-// 投喂咀嚼动画
 function feedAnim(){
+  soundFeed();
   if(animLock) return;
   animLock = true;
   petImg.classList.add("chew-anim");
@@ -494,16 +648,15 @@ function renderBackpack(){
   backpackList.innerHTML = "";
   FOOD_CONFIG.forEach(food=>{
     const div = document.createElement("div");
-    div.className = "item-card";
+    const has = data.bag[food.id] > 0;
+    div.className = "item-card " + (has ? "can-use" : "disabled");
     div.innerHTML = `
       <div class="item-name">${food.name}</div>
       <div class="item-desc">${food.desc}</div>
-      <div class="item-num">数量：${data.bag[food.id]}</div>
+      <div class="item-num">×${data.bag[food.id]}</div>
     `;
-    if(data.bag[food.id]>0){
+    if(has){
       div.onclick = ()=>feedWithFood(food);
-    }else{
-      div.style.opacity="0.4";
     }
     backpackList.appendChild(div);
   })
@@ -528,7 +681,6 @@ function feedWithFood(food){
   renderBackpack();
   closeBackpack();
 }
-// ==========小游戏逻辑==========
 function openGame(){
   const now = Date.now();
   if(now < data.gameCd){
@@ -539,44 +691,28 @@ function openGame(){
   gameModal.style.display="flex";
 }
 function closeGame(){
-  gameModal.style.display="none";
-  clearTimeout(gameTimer);
-  clearInterval(bubbleTimer);
+  clearInterval(gameMainTimer);
+  clearInterval(bubbleSpawnTimer);
   gameArea.innerHTML = "";
   gameRunning = false;
+  gameModal.style.display="none";
 }
 function startGame(){
   if(gameRunning) return;
   score = 0;
+  remainTime = 30;
   gameScoreEl.innerText = score;
+  gameTimerText.innerText = remainTime;
   gameRunning = true;
-  gameTipEl.innerText = "快点泡泡！30秒！";
-  // 30秒倒计时
-  gameTimer = setTimeout(()=>{
-    gameRunning = false;
-    clearInterval(bubbleTimer);
-    //结算奖励
-    let reward = {grain:0,cookie:0,fruit:0};
-    if(score >=40){
-      reward.grain=3; reward.cookie=2; reward.fruit=1;
-    }else if(score >=20){
-      reward.grain=2; reward.cookie=1;
-    }else if(score >=10){
-      reward.grain=2;
-    }else{
-      reward.grain=1;
+  gameTipEl.innerText = "快点泡泡！";
+  gameMainTimer = setInterval(()=>{
+    remainTime--;
+    gameTimerText.innerText = remainTime;
+    if(remainTime <= 0){
+      endGame();
     }
-    data.bag.grain += reward.grain;
-    data.bag.cookie += reward.cookie;
-    data.bag.fruit += reward.fruit;
-    data.gameCd = Date.now()+60*1000;
-    saveData(data);
-    renderBackpack();
-    alert(`⏱时间到！得分：${score}\n🎁奖励：口粮+${reward.grain} 饼干+${reward.cookie} 水果+${reward.fruit}`);
-    gameTipEl.innerText="游戏结束";
-  },30000);
-  // 生成泡泡
-  bubbleTimer = setInterval(()=>{
+  }, 1000);
+  bubbleSpawnTimer = setInterval(()=>{
     if(!gameRunning) return;
     const b = document.createElement("div");
     b.className="bubble";
@@ -586,14 +722,38 @@ function startGame(){
     b.style.top = Math.random()*(h-50)+"px";
     b.innerText="+1";
     b.onclick = ()=>{
+      soundGameHit();
       score +=1;
       gameScoreEl.innerText = score;
       b.remove();
     }
     gameArea.appendChild(b);
-    //泡泡2秒消失
     setTimeout(()=>b.remove(),2000);
   },700);
+}
+function endGame(){
+  soundGameEnd();
+  clearInterval(gameMainTimer);
+  clearInterval(bubbleSpawnTimer);
+  gameRunning = false;
+  let reward = {grain:0,cookie:0,fruit:0};
+  if(score >=40){
+    reward.grain=3; reward.cookie=2; reward.fruit=1;
+  }else if(score >=20){
+    reward.grain=2; reward.cookie=1;
+  }else if(score >=10){
+    reward.grain=2;
+  }else{
+    reward.grain=1;
+  }
+  data.bag.grain += reward.grain;
+  data.bag.cookie += reward.cookie;
+  data.bag.fruit += reward.fruit;
+  data.gameCd = Date.now()+60*1000;
+  saveData(data);
+  renderBackpack();
+  alert(`⏱时间到！得分：${score}\n🎁奖励：口粮+${reward.grain} 饼干+${reward.cookie} 水果+${reward.fruit}`);
+  gameTipEl.innerText="游戏结束";
 }
 function checkGuide(){
   const hide = localStorage.getItem("hideGuide");
@@ -652,7 +812,10 @@ function pet(){
 }
 function autoDecay(){
   const gap = (Date.now() - data.lastActive)/1000;
-  const sub = Math.floor(gap / 30);
+  let sub = Math.floor(gap / 30);
+  if(isNightTime()){
+    sub = Math.floor(sub * 0.4);
+  }
   data.hunger = Math.max(0, data.hunger - sub);
   data.mood = Math.max(0, data.mood - sub);
   data.lastActive = Date.now();
@@ -660,12 +823,20 @@ function autoDecay(){
   render();
 }
 function checkState() {
+  if(isNightTime()){
+    document.body.classList.add("night");
+  }else{
+    document.body.classList.remove("night");
+  }
   if (data.isPlaying) {
     petImg.src = "./play.png";
     statusText.innerText = "玩得好开心！🥰";
   } else if (data.hunger <= 15 || data.mood <= 15) {
     petImg.src = "./sad.png";
     statusText.innerText = "呜呜，快来陪陪我";
+  } else if (isNightTime()) {
+    petImg.src = "./sleep.png";
+    statusText.innerText = "💤呼呼睡觉中，不要打扰";
   } else if (data.hunger <= 30) {
     petImg.src = "./hungry.png";
     statusText.innerText = "肚子咕咕叫啦";
@@ -678,9 +849,6 @@ function checkState() {
   } else if (data.hunger >= 70 && data.mood >= 40 && (Date.now() - data.lastActive) > 80000) {
     petImg.src = "./bored.png";
     statusText.innerText = "有点无聊，陪陪我吧";
-  } else if (data.hunger >= 75 && data.mood >= 75 && (Date.now() - data.lastActive) > 60000) {
-    petImg.src = "./sleep.png";
-    statusText.innerText = "呼呼睡觉中💤";
   } else {
     petImg.src = "./normal.png";
     statusText.innerText = "乖乖待着哦~";
@@ -696,6 +864,7 @@ function render(){
 function addExp(num){
   data.exp += num;
   if(data.exp >= data.expNeed){
+    soundLevelUp();
     data.exp -= data.expNeed;
     data.level +=1;
     data.expNeed = Math.floor(data.expNeed *1.35);
