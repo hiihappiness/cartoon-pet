@@ -1,6 +1,6 @@
 const APP_VERSION = {
-  major: 1,
-  minor: 0
+  major: 2,
+  minor: 1
 };
 document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 const SW_TAG = `${APP_VERSION.major}.${APP_VERSION.minor}`;
@@ -150,7 +150,6 @@ if ("serviceWorker" in navigator) {
     })
   })
 }
-
 // 弹出更新确认，确认后skipWaiting并刷新页面
 function showUpdateConfirm(worker){
   if(!worker) return;
@@ -163,7 +162,6 @@ function showUpdateConfirm(worker){
     })
   }
 }
-
 async function checkUpdate() {
   if(!navigator.serviceWorker){
     alert("当前环境不支持PWA更新");
@@ -567,7 +565,11 @@ function renderBackpack(){
   tabs.forEach(t=>{
     const btn = document.createElement("button");
     btn.innerText = t.name;
-    btn.className = backpackTab === t.k ? "bp-tab active" : "bp-tab";
+    if(backpackTab === t.k){
+      btn.className = "bp-tab active";
+    }else{
+      btn.className = "bp-tab";
+    }
     btn.onclick = ()=>switchBackpackTab(t.k);
     tabWrap.appendChild(btn);
   })
@@ -685,7 +687,7 @@ function startGame(){
       b.remove();
     }
     gameArea.appendChild(b);
-    setTimeout(()=>b.remove(),2000);
+    setTimeout(()=>b.remove(), 2000);
   },700);
 }
 function endGame(){
@@ -835,6 +837,11 @@ function render(){
   tryGenBox();
   updateBuffUI();
   updateBoxNextUI();
+  // =====每次渲染同步团子名字到页面标题、浏览器标签
+  const pageTitleEl = document.querySelector('#pageTitle span');
+  const docTitleEl = document.getElementById('docTitle');
+  if(pageTitleEl) pageTitleEl.innerText = data.petName;
+  if(docTitleEl) docTitleEl.textContent = `🍄${data.petName}电子宠物`;
 }
 function addExp(num){
   data.exp += num;
@@ -875,6 +882,16 @@ document.addEventListener("visibilitychange", ()=>{
   }
 })
 startDecayLoop();
+// 弹窗遮罩点击关闭：只点击最外层modal才关闭，点击内部modal‑content不关闭
+function modalMaskClose(event){
+  if(event.target !== event.currentTarget) return;
+  const id = event.target.id;
+  if(id === "backpackModal") closeBackpack();
+  if(id === "gameModal") closeGame();
+  if(id === "saveModal") closeSaveModal();
+  if(id === "guideModal") closeGuideModal();
+}
+window.modalMaskClose = modalMaskClose;
 // 全局挂载，给html onclick调用
 window.claimAllBox = claimAllBox;
 window.doSignIn = doSignIn;
@@ -896,9 +913,3 @@ window.renamePet = renamePet;
 window.switchBackpackTab = switchBackpackTab;
 checkGuide();
 render();
-// 同步团子名字到页面标题 + 浏览器标签
-const pageTitleEl = document.querySelector('#pageTitle span');
-const docTitleEl = document.getElementById('docTitle');
-if(pageTitleEl) pageTitleEl.innerText = data.petName;
-if(docTitleEl) docTitleEl.textContent = `🍄${data.petName}电子宠物`;
-
