@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>蘑菇团子电子宠物</title>
+<title id="docTitle">蘑菇团子电子宠物</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#e65c5c">
 <style>
@@ -206,7 +206,6 @@ body.night .modal-content{
   gap:10px;
   margin-top:10px;
 }
-
 /* ===== 背包标签样式 ===== */
 .bp-tab-wrap{
   display:flex;
@@ -268,7 +267,6 @@ body.night .modal-content{
 .item-card:hover .item-tooltip{
   display:block;
 }
-
 .claim-info{
   margin:6px 0;
   padding:6px;
@@ -356,11 +354,10 @@ input[type="file"]{
   </div>
   <div class="btn-group-row">
     <button onclick="checkUpdate()">🔃更新</button>
-    <button onclick="resetPet()" class="btn-gray">🔄重置</button>
+    <!-- 删除了重置resetPet按钮，避免用户误清空存档 -->
   </div>
   <div class="tip"><span id="statusText">乖乖待着哦~</span></div>
 </div>
-
 <!-- 升级弹窗 -->
 <div class="modal" id="levelUpModal">
   <div class="modal-content">
@@ -369,7 +366,6 @@ input[type="file"]{
     <button onclick="closeLevelModal()">知道啦</button>
   </div>
 </div>
-
 <!-- 背包弹窗（带分类标签） -->
 <div class="modal" id="backpackModal">
   <div class="modal-content">
@@ -385,7 +381,6 @@ input[type="file"]{
     </div>
   </div>
 </div>
-
 <!-- 小游戏弹窗 -->
 <div class="modal" id="gameModal">
   <div class="modal-content">
@@ -399,7 +394,6 @@ input[type="file"]{
     </div>
   </div>
 </div>
-
 <!-- 存档弹窗 -->
 <div class="modal" id="saveModal">
   <div class="modal-content">
@@ -415,7 +409,6 @@ input[type="file"]{
     </div>
   </div>
 </div>
-
 <!-- 新手引导弹窗 -->
 <div class="modal" id="guideModal">
   <div class="modal-content">
@@ -428,7 +421,6 @@ input[type="file"]{
     <button onclick="closeGuideModal()">开始照料</button>
   </div>
 </div>
-
 <script src="./pet.js"></script>
 </body>
 </html>
