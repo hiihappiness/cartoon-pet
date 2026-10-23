@@ -1,6 +1,6 @@
 const APP_VERSION = {
   major: 2,
-  minor: 1
+  minor: 2
 };
 document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 const SW_TAG = `${APP_VERSION.major}.${APP_VERSION.minor}`;
