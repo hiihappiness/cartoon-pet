@@ -69,6 +69,7 @@ body.night{
   position:absolute;
   font-size:120px;
   display:none;
+  pointer-events:none;
 }
 #petImg.error + .pet-fallback{
   display:block;
@@ -203,6 +204,8 @@ body.night .tip{
   transition: background 1s;
   max-height:85vh;
   overflow-y:auto;
+  position:relative;
+  z-index:2;
 }
 body.night .modal-content{
   background:#2f344c;
@@ -220,7 +223,7 @@ body.night .modal-content p{
   gap:10px;
   margin-top:10px;
 }
-/* ===== 背包标签样式 修复button原生样式 ===== */
+/* ===== 背包标签【修复权重！！】 ===== */
 .bp-tab-wrap{
   display:flex;
   gap:4px;
@@ -241,10 +244,19 @@ body.night .bp-tab{
   background:#444a64;
   color:#eef;
 }
+/* 白天选中 */
 .bp-tab.active{
   background:#e65c5c;
   color:#fff;
+  font-weight:bold;
 }
+/* 夜间选中【关键：和上面选择器权重保持一致，写在night规则之后，覆盖夜间默认底色】 */
+body.night .bp-tab.active{
+  background:#e65c5c;
+  color:#ffffff;
+  font-weight:bold;
+}
+
 .bp-items-wrap{
   display:grid;
   grid-template-columns: repeat(3, 1fr);
@@ -355,6 +367,11 @@ input[type="file"]{
   text-align:left;
   margin:10px 0;
 }
+.modal-backdrop{
+  position:absolute;
+  inset:0;
+  z-index:1;
+}
 </style>
 </head>
 <body>
@@ -362,7 +379,7 @@ input[type="file"]{
 <div class="version-text">版本 v<span id="verShow">1.8</span></div>
 <div class="pet-wrap">
   <div class="talk-bubble" id="talkBubble"></div>
-  <img id="petImg" alt="蘑菇团子" onerror="this.classList.add('error')">
+  <img id="petImg" alt="蘑菇团子" onclick="petClick()" onerror="this.classList.add('error')">
   <div class="pet-fallback">🍄</div>
 </div>
 <div class="info-box">
@@ -392,9 +409,11 @@ input[type="file"]{
   </div>
   <div class="btn-group-row">
     <button onclick="checkUpdate()">🔃更新</button>
+    <button onclick="hardReload()" class="btn-gray">🔄强制重载</button>
   </div>
   <div class="tip"><span id="statusText">乖乖待着哦~</span></div>
 </div>
+
 <!-- 升级弹窗【禁止遮罩点击关闭，必须点知道啦】 -->
 <div class="modal" id="levelUpModal">
   <div class="modal-content">
@@ -403,8 +422,10 @@ input[type="file"]{
     <button onclick="closeLevelModal()">知道啦</button>
   </div>
 </div>
-<!-- 背包弹窗 点击遮罩关闭 -->
-<div class="modal" id="backpackModal" onclick="modalMaskClose(event)">
+
+<!-- 背包弹窗 -->
+<div class="modal" id="backpackModal">
+  <div class="modal-backdrop" onclick="modalMaskClose(event)"></div>
   <div class="modal-content">
     <h3>🎒食物背包</h3>
     <div class="claim-info">
@@ -418,8 +439,10 @@ input[type="file"]{
     </div>
   </div>
 </div>
-<!-- 小游戏弹窗 点击遮罩关闭 -->
-<div class="modal" id="gameModal" onclick="modalMaskClose(event)">
+
+<!-- 小游戏弹窗 -->
+<div class="modal" id="gameModal">
+  <div class="modal-backdrop" onclick="modalMaskClose(event)"></div>
   <div class="modal-content">
     <h3>🎮泡泡小游戏</h3>
     <p id="gameTip">点击泡泡得分！限时30秒</p>
@@ -431,8 +454,10 @@ input[type="file"]{
     </div>
   </div>
 </div>
-<!-- 存档弹窗 点击遮罩关闭 -->
-<div class="modal" id="saveModal" onclick="modalMaskClose(event)">
+
+<!-- 存档弹窗 -->
+<div class="modal" id="saveModal">
+  <div class="modal-backdrop" onclick="modalMaskClose(event)"></div>
   <div class="modal-content">
     <h3>存档管理</h3>
     <p>导出存档可以备份进度，换手机后导入恢复</p>
@@ -446,8 +471,10 @@ input[type="file"]{
     </div>
   </div>
 </div>
-<!-- 新手引导弹窗 点击遮罩关闭 -->
-<div class="modal" id="guideModal" onclick="modalMaskClose(event)">
+
+<!-- 新手引导弹窗 -->
+<div class="modal" id="guideModal">
+  <div class="modal-backdrop" onclick="modalMaskClose(event)"></div>
   <div class="modal-content">
     <h3>🍄欢迎来到蘑菇团子</h3>
     <p>✅ 点击团子可以和它对话<br>✅ 投喂食物提升饱食和心情<br>✅ 夜晚团子会睡觉，消耗变慢<br>✅ 玩泡泡小游戏赢零食奖励<br>✅ 宝箱离线自动累计，上限99个<br>💾 记得定期【存档备份】防止进度丢失</p>
@@ -458,6 +485,7 @@ input[type="file"]{
     <button onclick="closeGuideModal()">开始照料</button>
   </div>
 </div>
+
 <script src="./pet.js"></script>
 </body>
 </html>
