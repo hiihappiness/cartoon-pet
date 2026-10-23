@@ -1,6 +1,6 @@
 const APP_VERSION = {
   major: 2,
-  minor: 2
+  minor: 3
 };
 document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 const SW_TAG = `${APP_VERSION.major}.${APP_VERSION.minor}`;
@@ -56,13 +56,35 @@ const SIGN_CONFIG = {
   day7: {cake:2, bell:1},
   month: {sweetPotion:1}
 };
-// 成就配置
+// 成就配置【扩充完整版】
 const ACHIEVE_LIST = [
   {id:"feed10", name:"小小投喂家", desc:"累计投喂10次", target:10, type:"totalFeed", reward:{bell:1}},
+  {id:"feed50", name:"投喂达人", desc:"累计投喂50次", target:50, type:"totalFeed", reward:{cake:2}},
+  {id:"feed200", name:"美食管家", desc:"累计投喂200次", target:200, type:"totalFeed", reward:{sweetPotion:1}},
+
   {id:"touch50", name:"摸摸爱好者", desc:"累计抚摸团子50次", target:50, type:"totalTouch", reward:{feather:1}},
+  {id:"touch200", name:"贴心陪伴", desc:"累计抚摸团子200次", target:200, type:"totalTouch", reward:{cake:2}},
+  {id:"touch500", name:"贴贴狂魔", desc:"累计抚摸团子500次", target:500, type:"totalTouch", reward:{sweetPotion:1}},
+
   {id:"lv5", name:"五级萌新", desc:"团子升到5级", target:5, type:"level", reward:{cake:3}},
   {id:"lv10", name:"十级陪伴", desc:"团子升到10级", target:10, type:"level", reward:{sweetPotion:1}},
-  {id:"nightCare", name:"深夜陪伴", desc:"在夜间照料团子一次", target:1, type:"nightCare", reward:{milk:2}}
+  {id:"lv20", name:"长久相伴", desc:"团子升到20级", target:20, type:"level", reward:{sweetPotion:2}},
+
+  {id:"nightCare", name:"深夜陪伴", desc:"在夜间照料团子一次", target:1, type:"nightCare", reward:{milk:2}},
+  {id:"nightCare10", name:"守夜人", desc:"夜间照料团子10次", target:10, type:"nightCareCount", reward:{feather:2}},
+
+  {id:"game10", name:"游戏新手", desc:"游玩泡泡游戏10次", target:10, type:"totalGame", reward:{cookie:3}},
+  {id:"game50", name:"泡泡高手", desc:"游玩泡泡游戏50次", target:50, type:"totalGame", reward:{sweetPotion:1}},
+
+  {id:"box10", name:"寻宝新手", desc:"累计开启宝箱10个", target:10, type:"openBox", reward:{fruit:5}},
+  {id:"box50", name:"寻宝爱好者", desc:"累计开启宝箱50个", target:50, type:"openBox", reward:{bell:2}},
+  {id:"box200", name:"宝藏猎人", desc:"累计开启宝箱200个", target:200, type:"openBox", reward:{sweetPotion:2}},
+
+  {id:"buffUse", name:"舒缓时刻", desc:"第一次使用舒心药剂", target:1, type:"useBuff", reward:{milk:3}},
+
+  {id:"sign3", name:"三日之约", desc:"连续签到3天", target:3, type:"signContinue", reward:{grain:5}},
+  {id:"sign7", name:"一周陪伴", desc:"连续签到7天", target:7, type:"signContinue", reward:{cake:2}},
+  {id:"sign28", name:"月月相守", desc:"连续签到28天", target:28, type:"signContinue", reward:{sweetPotion:3}},
 ];
 const ITEM_CONFIG = [
   {id:"grain", name:"口粮", type:"food", tag:"主食", desc:"基础主食，饱食+20，经验+15", addHunger:20, addMood:0, addExp:15, cd:0},
@@ -220,6 +242,9 @@ const defaultData = {
   totalTouch:0,
   totalGame:0,
   totalExpGained:0,
+  nightCareCount:0,
+  openBoxCount:0,
+  buffUseCount:0,
   itemCd:{},
   buff:{
     slowDecayEnd:0
@@ -256,6 +281,9 @@ function loadData(){
     if(typeof data.totalTouch === 'undefined') data.totalTouch = 0;
     if(typeof data.totalGame === 'undefined') data.totalGame = 0;
     if(typeof data.totalExpGained === 'undefined') data.totalExpGained = 0;
+    if(typeof data.nightCareCount === "undefined") data.nightCareCount = 0;
+    if(typeof data.openBoxCount === "undefined") data.openBoxCount = 0;
+    if(typeof data.buffUseCount === "undefined") data.buffUseCount = 0;
     //旧存档兼容夜间唤醒字段
     if(typeof data.isNightAwake === "undefined") data.isNightAwake = false;
     if(typeof data.nightAwakeEnd === "undefined") data.nightAwakeEnd = 0;
@@ -364,6 +392,7 @@ function petClick(){
   data.lastTouchTime = now;
   data.totalTouch++;
   if(isNightTime()){
+    data.nightCareCount++;
     checkAchievement("nightCare");
   }
   saveData(data);
@@ -470,6 +499,7 @@ function claimAllBox(){
     if(data.bag[k] === undefined) data.bag[k] = 0;
     data.bag[k] += v;
   }
+  data.openBoxCount += list.length;
   soundReward();
   const text = Object.entries(totalReward).map(([k,v])=>{
     const it = ITEM_CONFIG.find(x=>x.id===k);
@@ -518,6 +548,7 @@ function doSignIn(){
     return `${it.name}×${v}`;
   }).join(" ");
   alert(`✅签到成功！连续${data.signContinueDay}天\n🎁奖励：${text}`);
+  checkAchievement("signContinue");
   saveData(data);
   renderBackpack();
 }
@@ -530,6 +561,12 @@ function checkAchievement(type){
     if(ach.type === "totalTouch" && data.totalTouch >= ach.target) ok = true;
     if(ach.type === "level" && data.level >= ach.target) ok = true;
     if(ach.type === "nightCare" && type === "nightCare") ok = true;
+    if(ach.type === "nightCareCount" && data.nightCareCount >= ach.target) ok = true;
+    if(ach.type === "totalGame" && data.totalGame >= ach.target) ok = true;
+    if(ach.type === "openBox" && data.openBoxCount >= ach.target) ok = true;
+    if(ach.type === "useBuff" && data.buffUseCount >= ach.target) ok = true;
+    if(ach.type === "signContinue" && data.signContinueDay >= ach.target) ok = true;
+
     if(ok){
       data.achieveDone.push(ach.id);
       for(const [k,v] of Object.entries(ach.reward)){
@@ -610,7 +647,8 @@ function renderBackpack(){
     {k:"all", name:"全部"},
     {k:"food", name:"食物"},
     {k:"toy", name:"玩具"},
-    {k:"potion", name:"药剂"}
+    {k:"potion", name:"药剂"},
+    {k:"achieve", name:"成就"}
   ];
   tabs.forEach(t=>{
     const btn = document.createElement("button");
@@ -628,6 +666,35 @@ function renderBackpack(){
     tabWrap.appendChild(btn);
   })
   backpackList.appendChild(tabWrap);
+
+  if(backpackTab === "achieve"){
+    const achieveWrap = document.createElement("div");
+    achieveWrap.className = "achieve-wrap";
+    ACHIEVE_LIST.forEach(ach=>{
+      const done = data.achieveDone.includes(ach.id);
+      const div = document.createElement("div");
+      div.className = "achieve-card " + (done ? "done" : "lock");
+      let progressText = "";
+      if(ach.type === "totalFeed") progressText = `${Math.min(data.totalFeed, ach.target)}/${ach.target}`;
+      if(ach.type === "totalTouch") progressText = `${Math.min(data.totalTouch, ach.target)}/${ach.target}`;
+      if(ach.type === "level") progressText = `${Math.min(data.level, ach.target)}/${ach.target}`;
+      if(ach.type === "nightCareCount") progressText = `${Math.min(data.nightCareCount, ach.target)}/${ach.target}`;
+      if(ach.type === "totalGame") progressText = `${Math.min(data.totalGame, ach.target)}/${ach.target}`;
+      if(ach.type === "openBox") progressText = `${Math.min(data.openBoxCount, ach.target)}/${ach.target}`;
+      if(ach.type === "signContinue") progressText = `${Math.min(data.signContinueDay, ach.target)}/${ach.target}`;
+      if(ach.type === "useBuff") progressText = `${Math.min(data.buffUseCount, ach.target)}/${ach.target}`;
+
+      div.innerHTML = `
+        <div class="achieve-name">${done ? "✅" : "🔒"} ${ach.name}</div>
+        <div class="achieve-desc">${ach.desc}</div>
+        <div class="achieve-progress">进度：${progressText}</div>
+      `;
+      achieveWrap.appendChild(div);
+    })
+    backpackList.appendChild(achieveWrap);
+    return;
+  }
+
   const itemWrap = document.createElement("div");
   itemWrap.className = "bp-items-wrap";
   ITEM_CONFIG.forEach(item=>{
@@ -687,6 +754,8 @@ function useItem(item){
   data.mood = Math.min(100, data.mood + item.addMood);
   if(item.type === "potion"){
     data.buff.slowDecayEnd = now + item.buffTime;
+    data.buffUseCount ++;
+    checkAchievement("useBuff");
     alert("✨舒心药剂生效！30分钟衰减减半");
   }else{
     if(item.addExp>0){
