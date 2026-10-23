@@ -372,6 +372,40 @@ input[type="file"]{
   inset:0;
   z-index:1;
 }
+.achieve-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin-top:10px;
+  max-height:60vh;
+  overflow-y:auto;
+}
+.achieve-card{
+  padding:10px;
+  border-radius:10px;
+  border:1px solid #ddd;
+}
+.achieve-card.done{
+  background:#eafdea;
+  border-color:#73c973;
+}
+.achieve-card.lock{
+  background:#f7f7f7;
+  color:#777;
+}
+.achieve-name{
+  font-weight:bold;
+  font-size:15px;
+}
+.achieve-desc{
+  font-size:12px;
+  margin:3px 0;
+}
+.achieve-progress{
+  font-size:12px;
+  color:#448;
+}
+
 </style>
 </head>
 <body>
