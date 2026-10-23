@@ -15,7 +15,8 @@ const CONFIG = {
   sadExpRate: 0.7,
   fullHungerLimit: 95,
   halfFeedLimit: 80,
-  maxCacheBox: 99
+  maxCacheBox: 99,
+  nightWakeDuration: 90 * 1000 //夜间唤醒持续90秒
 };
 // 宝箱配置
 const BOX_CONFIG = [
@@ -150,6 +151,11 @@ if ("serviceWorker" in navigator) {
     })
   })
 }
+//备用：微信等缓存顽固环境，强制带时间戳重新加载页面，localStorage存档不会丢失
+function hardReload(){
+  if(!confirm("将完全重载页面，宠物存档不会丢失，确认继续？")) return;
+  location.href = `./index.html?_t=${Date.now()}`;
+}
 // 弹出更新确认，确认后skipWaiting并刷新页面
 function showUpdateConfirm(worker){
   if(!worker) return;
@@ -192,6 +198,9 @@ const defaultData = {
   lastActive:Date.now(),
   lastBoxGenTime: Date.now(),
   isPlaying: false,
+  //夜间唤醒
+  isNightAwake: false,
+  nightAwakeEnd:0,
   bag:{
     grain:5,
     cookie:3,
@@ -247,6 +256,9 @@ function loadData(){
     if(typeof data.totalTouch === 'undefined') data.totalTouch = 0;
     if(typeof data.totalGame === 'undefined') data.totalGame = 0;
     if(typeof data.totalExpGained === 'undefined') data.totalExpGained = 0;
+    //旧存档兼容夜间唤醒字段
+    if(typeof data.isNightAwake === "undefined") data.isNightAwake = false;
+    if(typeof data.nightAwakeEnd === "undefined") data.nightAwakeEnd = 0;
     ITEM_CONFIG.forEach(item=>{
       if(typeof data.bag[item.id] === "undefined"){
         data.bag[item.id] = 0;
@@ -286,6 +298,18 @@ let bubbleSpawnTimer = null;
 let score = 0;
 let gameRunning = false;
 let remainTime = 30;
+//====夜间唤醒函数====
+function wakePetAtNight(){
+  if(!isNightTime()) return;
+  data.isNightAwake = true;
+  data.nightAwakeEnd = Date.now() + CONFIG.nightWakeDuration;
+  saveData(data);
+  //唤醒专属台词
+  const bubble = talkBubble;
+  bubble.innerText = "唔……被你叫醒啦✨";
+  bubble.style.opacity = "1";
+  setTimeout(()=>{ bubble.style.opacity = "0"; },2200);
+}
 function isNightTime(){
   const h = new Date().getHours();
   return h >= NIGHT_START || h < DAY_START;
@@ -309,7 +333,8 @@ function calcDecayPerMinute(){
 function showTalk(){
   const bubble = talkBubble;
   let txt;
-  if(isNightTime()){
+  //夜间并且未唤醒才播放夜间台词；唤醒用白天台词
+  if(isNightTime() && !data.isNightAwake){
     txt = TALK_LIST_NIGHT[Math.floor(Math.random() * TALK_LIST_NIGHT.length)];
   }else{
     txt = TALK_LIST_DAY[Math.floor(Math.random() * TALK_LIST_DAY.length)];
@@ -322,7 +347,12 @@ function showTalk(){
 }
 function petClick(){
   soundTap();
-  showTalk();
+  //夜间睡觉状态点击执行唤醒
+  if(isNightTime() && !data.isNightAwake){
+    wakePetAtNight();
+  }else{
+    showTalk();
+  }
   if(animLock) return;
   const now = Date.now();
   const gap = now - data.lastTouchTime;
@@ -391,6 +421,7 @@ function tryGenBox(){
   saveData(data);
 }
 // 【修复版：汇总一次弹窗，不会浏览器阻塞】
+// 【修复版：汇总一次弹窗，宝箱名称做数量合并，不会浏览器阻塞】
 function claimAllBox(){
   console.log("点击领取，队列：", JSON.parse(JSON.stringify(data.boxQueue)));
   if(data.boxQueue.length === 0){
@@ -400,15 +431,23 @@ function claimAllBox(){
   const list = [...data.boxQueue];
   data.boxQueue = [];
   saveData(data);
+
+  //统计每种宝箱出现多少次
+  const boxCountMap = {};
   const totalReward = {};
-  const boxNames = [];
+
   list.forEach(box=>{
     const boxCfg = getBoxInfo(box.type);
     if(!boxCfg){
       console.warn("非法宝箱类型跳过：", box);
       return;
     }
-    boxNames.push(boxCfg.name);
+    //统计宝箱数量
+    if(!boxCountMap[boxCfg.key]){
+      boxCountMap[boxCfg.key] = { name: boxCfg.name, count:0 };
+    }
+    boxCountMap[boxCfg.key].count +=1;
+
     const reward = {};
     for(const [itemId, range] of Object.entries(boxCfg.reward)){
       const min = range[0], max = range[1];
@@ -420,12 +459,23 @@ function claimAllBox(){
       totalReward[k] += v;
     }
   })
+
+  //组装合并后的宝箱显示文本：青铜宝箱×3、白银宝箱×2
+  const boxShowArr = Object.values(boxCountMap).map(item=>{
+    return `${item.name}×${item.count}`;
+  });
+
+  //宝箱奖励写入背包
+  for(const [k,v] of Object.entries(totalReward)){
+    if(data.bag[k] === undefined) data.bag[k] = 0;
+    data.bag[k] += v;
+  }
   soundReward();
   const text = Object.entries(totalReward).map(([k,v])=>{
     const it = ITEM_CONFIG.find(x=>x.id===k);
     return `${it.name}×${v}`;
-  }).join(" ");
-  alert(`📦一共开启：${boxNames.join("、")}\n🎁全部奖励：${text}`);
+  }).join("\n");
+  alert(`📦一共开启：${boxShowArr.join("、")}\n🎁全部奖励：${text}`);
   tryGenBox();
   saveData(data);
   renderBackpack();
@@ -544,7 +594,7 @@ function updateBoxNextUI(){
     }
   }
 }
-// ========== B组：背包分类渲染 + tooltip ==========
+// ========== B组：背包分类渲染 + tooltip【修复冒泡】 ==========
 let backpackTab = "all";
 function switchBackpackTab(tabKey){
   backpackTab = tabKey;
@@ -567,10 +617,14 @@ function renderBackpack(){
     btn.innerText = t.name;
     if(backpackTab === t.k){
       btn.className = "bp-tab active";
+      btn.style.fontWeight = "bold";
     }else{
       btn.className = "bp-tab";
     }
-    btn.onclick = ()=>switchBackpackTab(t.k);
+    btn.onclick = (e)=>{
+      e.stopPropagation(); //阻止冒泡，不会关闭弹窗
+      switchBackpackTab(t.k);
+    }
     tabWrap.appendChild(btn);
   })
   backpackList.appendChild(tabWrap);
@@ -597,7 +651,10 @@ function renderBackpack(){
     `;
     div.appendChild(tipDom);
     if(has && !inCd){
-      div.onclick = ()=>useItem(item);
+      div.onclick = (e)=>{
+        e.stopPropagation(); //阻止冒泡
+        useItem(item);
+      }
     }
     itemWrap.appendChild(div);
   })
@@ -619,6 +676,10 @@ function useItem(item){
   data.bag[item.id]--;
   data.totalFeed++;
   checkAchievement("totalFeed");
+  //使用玩具，夜间睡觉状态唤醒；食物不唤醒
+  if(item.type === "toy" && isNightTime() && !data.isNightAwake){
+    wakePetAtNight();
+  }
   if(item.cd>0){
     data.itemCd[item.id] = now + item.cd;
   }
@@ -687,7 +748,7 @@ function startGame(){
       b.remove();
     }
     gameArea.appendChild(b);
-    setTimeout(()=>b.remove(), 2000);
+    setTimeout(()=>b.remove(),2000);
   },700);
 }
 function endGame(){
@@ -762,8 +823,8 @@ fileInput.onchange = function(e){
   reader.onload = function(ev){
     try{
       const imported = JSON.parse(ev.target.result);
-      data = imported;
-      saveData(data);
+      localStorage.setItem('mushroomPetData', JSON.stringify(imported));
+      data = loadData();
       render();
       alert("✅存档导入成功");
       closeSaveModal();
@@ -777,12 +838,13 @@ fileInput.onchange = function(e){
 function pet(){
   petClick();
 }
-// 离线衰减
+// 离线衰减【修复：后台宝箱累计】
 function autoDecay(){
   const now = Date.now();
   const gapMin = (now - data.lastActive)/60000;
   if(gapMin <=0){
     data.lastActive = now;
+    tryGenBox();
     saveData(data);
     return;
   }
@@ -791,24 +853,37 @@ function autoDecay(){
   data.hunger = Math.max(0, data.hunger - sub);
   data.mood = Math.max(0, data.mood - sub);
   data.lastActive = now;
+  tryGenBox();
   saveData(data);
   render();
 }
 function checkState(){
+  const now = Date.now();
   if(isNightTime()){
     document.body.classList.add("night");
   }else{
     document.body.classList.remove("night");
   }
+  //清醒时间到期自动关闭唤醒
+  if(isNightTime() && data.isNightAwake){
+    if(now >= data.nightAwakeEnd){
+      data.isNightAwake = false;
+      saveData(data);
+    }
+  }
+  //夜间并且没有被唤醒 →睡觉模式
+  if (isNightTime() && !data.isNightAwake) {
+    petImg.src = "./sleep.png";
+    statusText.innerText = `${data.petName}：💤呼呼睡觉中`;
+    return;
+  }
+  //夜间被唤醒 / 白天共用正常状态逻辑
   if (data.isPlaying) {
     petImg.src = "./play.png";
     statusText.innerText = `${data.petName}：玩得好开心！🥰`;
   } else if (data.hunger <= 15 || data.mood <= 15) {
     petImg.src = "./sad.png";
     statusText.innerText = `${data.petName}：呜呜，快来陪我`;
-  } else if (isNightTime()) {
-    petImg.src = "./sleep.png";
-    statusText.innerText = `${data.petName}：💤呼呼睡觉中`;
   } else if (data.hunger <= 30) {
     petImg.src = "./hungry.png";
     statusText.innerText = `${data.petName}：肚子饿饿，想吃东西`;
@@ -824,6 +899,11 @@ function checkState(){
   } else {
     petImg.src = "./normal.png";
     statusText.innerText = `${data.petName}：乖乖待着哦~`;
+  }
+  //夜间清醒状态追加倒计时提示
+  if(isNightTime() && data.isNightAwake){
+    const leftSec = Math.ceil((data.nightAwakeEnd - now)/1000);
+    statusText.innerText += ` 🌙清醒${leftSec}s`;
   }
 }
 function render(){
@@ -866,7 +946,7 @@ function resetPet(){
   saveData(data);
   render();
 }
-// ========== A组：页面可见性，防后台多标签计时错乱 ==========
+// ========== A组：页面可见性，切后台自动结束泡泡游戏 ==========
 let decayTimer = null;
 function startDecayLoop(){
   if(decayTimer) clearInterval(decayTimer);
@@ -876,6 +956,9 @@ document.addEventListener("visibilitychange", ()=>{
   if(document.hidden){
     autoDecay();
     clearInterval(decayTimer);
+    if(gameRunning){
+      endGame();
+    }
   }else{
     autoDecay();
     startDecayLoop();
@@ -893,6 +976,7 @@ function modalMaskClose(event){
 }
 window.modalMaskClose = modalMaskClose;
 // 全局挂载，给html onclick调用
+window.hardReload = hardReload;
 window.claimAllBox = claimAllBox;
 window.doSignIn = doSignIn;
 window.pet = pet;
