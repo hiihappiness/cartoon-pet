@@ -1,5 +1,5 @@
 // 【重要】每次发布新版本，手动修改此处版本字符串！SW无法读取pet.js的SW_TAG
-const CACHE_NAME = "mushroom-pet-v2.3";
+const CACHE_NAME = "mushroom-pet-v2.4";
 
 // 需要离线缓存全部静态资源
 const assetsToCache = [
