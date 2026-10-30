@@ -1,59 +1,107 @@
 const APP_VERSION = {
   major: 2,
-  minor: 2
+  minor: 3
 };
 document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 const SW_TAG = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 
-// ========== 新增：自动版本检测 ==========
+// ========== 增强：远程version.json版本检测 ==========
 let hasNewVersion = false;
+
+/** 远程拉取version.json对比版本 */
 async function checkRemoteVersion() {
   try {
-    // 加随机参数，干掉微信浏览器缓存
-    const res = await fetch(`./version.json?t=${Date.now()}`);
-    if (!res.ok) throw new Error("版本文件获取失败");
+    const res = await fetch(`./version.json?t=${Date.now()}`, {
+      cache: "no‑store",
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) throw new Error(`http ${res.status}`);
     const remote = await res.json();
-    // 版本对比逻辑
+    if (!remote || typeof remote.major !== "number") throw new Error("version.json格式错误");
+
     const localVer = APP_VERSION.major * 1000 + APP_VERSION.minor;
     const remoteVer = remote.major * 1000 + remote.minor;
+
     if (remoteVer > localVer) {
       hasNewVersion = true;
-      showUpdateTip(remote);
+      showRemoteUpdateTip(remote);
+    } else {
+      hasNewVersion = false;
     }
+    return { hasNewVersion, remote };
   } catch (e) {
-    console.log("版本检测失败（离线/网络）：", e);
+    console.warn("[版本检测]失败(离线/超时):", e.message);
+    hasNewVersion = false;
+    return { hasNewVersion: false, remote: null };
   }
 }
 
-// 弹出更新提示弹窗
-function showUpdateTip(remote) {
-  const tip = confirm(`✨发现新版本 v${remote.major}.${remote.minor}\n更新说明：${remote.note}\n点击确定自动更新并刷新`);
-  if (tip) {
-    doSWUpdate();
+/** 弹窗提示有新版本（原生confirm，后续可替换为项目modal） */
+function showRemoteUpdateTip(remote) {
+  const msg = `✨发现新版本 v${remote.major}.${remote.minor}\n更新说明：${remote.note || "优化体验与修复BUG"}\n点击【确定】执行更新并刷新页面`;
+  const ok = confirm(msg);
+  if (ok) {
+    triggerSWUpdate();
   }
 }
 
-// 执行SW更新
-async function doSWUpdate() {
-  if (!('serviceWorker' in navigator)) {
-    alert("当前环境不支持PWA更新，请手动清缓存刷新页面");
-    location.reload();
+/** 执行SW更新，监听controllerchange接管页面 */
+async function triggerSWUpdate() {
+  if (!("serviceWorker" in navigator)) {
+    alert("⚠️当前浏览器不支持PWA更新，请手动刷新页面。");
+    location.href = `./index.html?_t=${Date.now()}`;
     return;
   }
   const reg = await navigator.serviceWorker.getRegistration();
-  if (reg) {
-    reg.update();
+  if (!reg) {
+    alert("⚠️未检测到服务工作线程，手动刷新页面。");
+    location.href = `./index.html?_t=${Date.now()}`;
+    return;
   }
-  // 监听sw接管事件，刷新页面
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
+
+  let reloadFired = false;
+  const onControllerChange = () => {
+    if (reloadFired) return;
+    reloadFired = true;
+    navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
     location.reload();
-  });
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+
+  try {
+    await reg.update();
+    // 如果已经存在waiting worker直接弹窗确认更新
+    if (reg.waiting) {
+      showUpdateConfirm(reg.waiting);
+    } else {
+      alert("✅已触发更新下载，请等待下载完成后页面自动刷新。");
+    }
+  } catch (err) {
+    console.error("SW update异常", err);
+    alert("⚠️更新触发失败，请手动刷新页面。");
+  }
 }
 
-// 页面加载完成后自动检测版本
-window.addEventListener('load', () => {
-  // 延迟一点检测，避免阻塞宠物初始化
-  setTimeout(checkRemoteVersion, 800);
+/** 手动检查更新按钮调用入口 */
+async function manualCheckUpdate() {
+  await checkRemoteVersion();
+  if (!hasNewVersion) {
+    alert("✅当前已经是最新版本");
+  }
+}
+
+// 页面加载延迟自动检测版本，不阻塞初始化
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    checkRemoteVersion();
+  }, 1000);
+});
+
+// 页面切回前台（可选，再次检测版本，注释掉可以关闭）
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    setTimeout(checkRemoteVersion, 1200);
+  }
 });
 
 // ===================== 【佛系数值配置】 =====================
@@ -68,7 +116,7 @@ const CONFIG = {
   fullHungerLimit: 95,
   halfFeedLimit: 80,
   maxCacheBox: 99,
-  nightWakeDuration: 90 * 1000 //夜间唤醒持续90秒
+  nightWakeDuration: 90 * 1000
 };
 // 宝箱配置
 const BOX_CONFIG = [
@@ -204,13 +252,12 @@ function toggleSound(){
   soundEnable = !soundEnable;
   document.getElementById('soundBtn').innerText = soundEnable ? "🔊音效开" : "🔇音效关";
 }
-// ===================== PWA serviceWorker 修复更新逻辑 =====================
+// ===================== PWA serviceWorker 旧注册监听（保留兼容） =====================
 let newWorker = null;
 let swReg = null;
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register(`./service-worker.js`).then(reg => {
     swReg = reg;
-    // 页面刚打开，如果已经有等待中的新版本（后台已经下载好）
     if(reg.waiting){
       showUpdateConfirm(reg.waiting);
     }
@@ -225,12 +272,10 @@ if ("serviceWorker" in navigator) {
     })
   })
 }
-//备用：微信等缓存顽固环境，强制带时间戳重新加载页面，localStorage存档不会丢失
 function hardReload(){
   if(!confirm("将完全重载页面，宠物存档不会丢失，确认继续？")) return;
   location.href = `./index.html?_t=${Date.now()}`;
 }
-// 弹出更新确认，确认后skipWaiting并刷新页面
 function showUpdateConfirm(worker){
   if(!worker) return;
   if (confirm("🍄检测到新版本，确认立即更新并刷新页面？")) {
@@ -243,25 +288,9 @@ function showUpdateConfirm(worker){
   }
 }
 async function checkUpdate() {
-  if(!navigator.serviceWorker){
-    alert("当前环境不支持PWA更新");
-    return;
-  }
-  const reg = swReg ?? await navigator.serviceWorker.getRegistration();
-  if(!reg){ alert("无注册服务"); return; }
-  try{
-    await reg.update();
-    // update之后，已经存在waiting，直接弹窗
-    if(reg.waiting){
-      showUpdateConfirm(reg.waiting);
-    }else{
-      alert("✅当前已经是最新版本");
-    }
-  }catch(err){
-    alert("⚠️更新检查失败，请稍后重试");
-    console.error(err);
-  }
+  await manualCheckUpdate();
 }
+
 const defaultData = {
   petName:"团子",
   level:1,
@@ -272,7 +301,6 @@ const defaultData = {
   lastActive:Date.now(),
   lastBoxGenTime: Date.now(),
   isPlaying: false,
-  //夜间唤醒
   isNightAwake: false,
   nightAwakeEnd:0,
   bag:{
@@ -336,7 +364,6 @@ function loadData(){
     if(typeof data.nightCareCount === "undefined") data.nightCareCount = 0;
     if(typeof data.openBoxCount === "undefined") data.openBoxCount = 0;
     if(typeof data.buffUseCount === "undefined") data.buffUseCount = 0;
-    //旧存档兼容夜间唤醒字段
     if(typeof data.isNightAwake === "undefined") data.isNightAwake = false;
     if(typeof data.nightAwakeEnd === "undefined") data.nightAwakeEnd = 0;
     ITEM_CONFIG.forEach(item=>{
@@ -384,7 +411,6 @@ function wakePetAtNight(){
   data.isNightAwake = true;
   data.nightAwakeEnd = Date.now() + CONFIG.nightWakeDuration;
   saveData(data);
-  //唤醒专属台词
   const bubble = talkBubble;
   bubble.innerText = "唔……被你叫醒啦✨";
   bubble.style.opacity = "1";
@@ -413,7 +439,6 @@ function calcDecayPerMinute(){
 function showTalk(){
   const bubble = talkBubble;
   let txt;
-  //夜间并且未唤醒才播放夜间台词；唤醒用白天台词
   if(isNightTime() && !data.isNightAwake){
     txt = TALK_LIST_NIGHT[Math.floor(Math.random() * TALK_LIST_NIGHT.length)];
   }else{
@@ -427,7 +452,6 @@ function showTalk(){
 }
 function petClick(){
   soundTap();
-  //夜间睡觉状态点击执行唤醒
   if(isNightTime() && !data.isNightAwake){
     wakePetAtNight();
   }else{
@@ -501,8 +525,6 @@ function tryGenBox(){
   }
   saveData(data);
 }
-// 【修复版：汇总一次弹窗，不会浏览器阻塞】
-// 【修复版：汇总一次弹窗，宝箱名称做数量合并，不会浏览器阻塞】
 function claimAllBox(){
   console.log("点击领取，队列：", JSON.parse(JSON.stringify(data.boxQueue)));
   if(data.boxQueue.length === 0){
@@ -513,7 +535,6 @@ function claimAllBox(){
   data.boxQueue = [];
   saveData(data);
 
-  //统计每种宝箱出现多少次
   const boxCountMap = {};
   const totalReward = {};
 
@@ -523,7 +544,6 @@ function claimAllBox(){
       console.warn("非法宝箱类型跳过：", box);
       return;
     }
-    //统计宝箱数量
     if(!boxCountMap[boxCfg.key]){
       boxCountMap[boxCfg.key] = { name: boxCfg.name, count:0 };
     }
@@ -541,12 +561,10 @@ function claimAllBox(){
     }
   })
 
-  //组装合并后的宝箱显示文本：青铜宝箱×3、白银宝箱×2
   const boxShowArr = Object.values(boxCountMap).map(item=>{
     return `${item.name}×${item.count}`;
   });
 
-  //宝箱奖励写入背包
   for(const [k,v] of Object.entries(totalReward)){
     if(data.bag[k] === undefined) data.bag[k] = 0;
     data.bag[k] += v;
@@ -683,7 +701,7 @@ function updateBoxNextUI(){
     }
   }
 }
-// ========== B组：背包分类渲染 + tooltip【修复冒泡】 ==========
+// ========== B组：背包分类渲染 ==========
 let backpackTab = "all";
 function switchBackpackTab(tabKey){
   backpackTab = tabKey;
@@ -712,7 +730,7 @@ function renderBackpack(){
       btn.className = "bp-tab";
     }
     btn.onclick = (e)=>{
-      e.stopPropagation(); //阻止冒泡，不会关闭弹窗
+      e.stopPropagation();
       switchBackpackTab(t.k);
     }
     tabWrap.appendChild(btn);
@@ -771,7 +789,7 @@ function renderBackpack(){
     div.appendChild(tipDom);
     if(has && !inCd){
       div.onclick = (e)=>{
-        e.stopPropagation(); //阻止冒泡
+        e.stopPropagation();
         useItem(item);
       }
     }
@@ -795,7 +813,6 @@ function useItem(item){
   data.bag[item.id]--;
   data.totalFeed++;
   checkAchievement("totalFeed");
-  //使用玩具，夜间睡觉状态唤醒；食物不唤醒
   if(item.type === "toy" && isNightTime() && !data.isNightAwake){
     wakePetAtNight();
   }
@@ -959,7 +976,6 @@ fileInput.onchange = function(e){
 function pet(){
   petClick();
 }
-// 离线衰减【修复：后台宝箱累计】
 function autoDecay(){
   const now = Date.now();
   const gapMin = (now - data.lastActive)/60000;
@@ -985,20 +1001,17 @@ function checkState(){
   }else{
     document.body.classList.remove("night");
   }
-  //清醒时间到期自动关闭唤醒
   if(isNightTime() && data.isNightAwake){
     if(now >= data.nightAwakeEnd){
       data.isNightAwake = false;
       saveData(data);
     }
   }
-  //夜间并且没有被唤醒 →睡觉模式
   if (isNightTime() && !data.isNightAwake) {
     petImg.src = "./sleep.png";
     statusText.innerText = `${data.petName}：💤呼呼睡觉中`;
     return;
   }
-  //夜间被唤醒 / 白天共用正常状态逻辑
   if (data.isPlaying) {
     petImg.src = "./play.png";
     statusText.innerText = `${data.petName}：玩得好开心！🥰`;
@@ -1021,7 +1034,6 @@ function checkState(){
     petImg.src = "./normal.png";
     statusText.innerText = `${data.petName}：乖乖待着哦~`;
   }
-  //夜间清醒状态追加倒计时提示
   if(isNightTime() && data.isNightAwake){
     const leftSec = Math.ceil((data.nightAwakeEnd - now)/1000);
     statusText.innerText += ` 🌙清醒${leftSec}s`;
@@ -1038,7 +1050,6 @@ function render(){
   tryGenBox();
   updateBuffUI();
   updateBoxNextUI();
-  // =====每次渲染同步团子名字到页面标题、浏览器标签
   const pageTitleEl = document.querySelector('#pageTitle span');
   const docTitleEl = document.getElementById('docTitle');
   if(pageTitleEl) pageTitleEl.innerText = data.petName;
@@ -1067,7 +1078,6 @@ function resetPet(){
   saveData(data);
   render();
 }
-// ========== A组：页面可见性，切后台自动结束泡泡游戏 ==========
 let decayTimer = null;
 function startDecayLoop(){
   if(decayTimer) clearInterval(decayTimer);
@@ -1086,7 +1096,6 @@ document.addEventListener("visibilitychange", ()=>{
   }
 })
 startDecayLoop();
-// 弹窗遮罩点击关闭：只点击最外层modal才关闭，点击内部modal‑content不关闭
 function modalMaskClose(event){
   if(event.target !== event.currentTarget) return;
   const id = event.target.id;
@@ -1096,7 +1105,6 @@ function modalMaskClose(event){
   if(id === "guideModal") closeGuideModal();
 }
 window.modalMaskClose = modalMaskClose;
-// 全局挂载，给html onclick调用
 window.hardReload = hardReload;
 window.claimAllBox = claimAllBox;
 window.doSignIn = doSignIn;
