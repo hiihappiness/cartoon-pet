@@ -1,9 +1,61 @@
 const APP_VERSION = {
   major: 2,
-  minor: 3
+  minor: 2
 };
 document.getElementById("verShow").innerText = `${APP_VERSION.major}.${APP_VERSION.minor}`;
 const SW_TAG = `${APP_VERSION.major}.${APP_VERSION.minor}`;
+
+// ========== 新增：自动版本检测 ==========
+let hasNewVersion = false;
+async function checkRemoteVersion() {
+  try {
+    // 加随机参数，干掉微信浏览器缓存
+    const res = await fetch(`./version.json?t=${Date.now()}`);
+    if (!res.ok) throw new Error("版本文件获取失败");
+    const remote = await res.json();
+    // 版本对比逻辑
+    const localVer = APP_VERSION.major * 1000 + APP_VERSION.minor;
+    const remoteVer = remote.major * 1000 + remote.minor;
+    if (remoteVer > localVer) {
+      hasNewVersion = true;
+      showUpdateTip(remote);
+    }
+  } catch (e) {
+    console.log("版本检测失败（离线/网络）：", e);
+  }
+}
+
+// 弹出更新提示弹窗
+function showUpdateTip(remote) {
+  const tip = confirm(`✨发现新版本 v${remote.major}.${remote.minor}\n更新说明：${remote.note}\n点击确定自动更新并刷新`);
+  if (tip) {
+    doSWUpdate();
+  }
+}
+
+// 执行SW更新
+async function doSWUpdate() {
+  if (!('serviceWorker' in navigator)) {
+    alert("当前环境不支持PWA更新，请手动清缓存刷新页面");
+    location.reload();
+    return;
+  }
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (reg) {
+    reg.update();
+  }
+  // 监听sw接管事件，刷新页面
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    location.reload();
+  });
+}
+
+// 页面加载完成后自动检测版本
+window.addEventListener('load', () => {
+  // 延迟一点检测，避免阻塞宠物初始化
+  setTimeout(checkRemoteVersion, 800);
+});
+
 // ===================== 【佛系数值配置】 =====================
 const CONFIG = {
   baseDecay: 0.35,
