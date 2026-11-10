@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>v2.8 冒烟测试</title>
+<style>
+  body { font-family: monospace; padding: 12px; }
+  #whackModal, #memoryModal { display: none; }
+  #whackArea { display: grid; grid-template-columns: repeat(3, 60px); gap: 4px; }
+  .whack-hole { width: 60px; height: 60px; background: #ddd; }
+  .whack-hole.up { background: #ffcc66; }
+  #memoryGrid { display: grid; grid-template-columns: repeat(4, 50px); gap: 4px; }
+  .memory-card { width: 50px; height: 50px; background: #eee; }
+  .memory-card.flipped { background: #ffe066; }
+</style>
+</head>
+<body>
+<h3>v2.8 冒烟测试</h3>
+<pre id="result">RUNNING</pre>
+
+<div id="whackModal"><p id="whackTip"></p><p><span id="whackScore">0</span>/<span id="whackTimerText">30</span></p><div id="whackArea"></div><button id="whackStartBtn"></button><button id="whackCloseBtn"></button></div>
+<div id="memoryModal"><p id="memoryTip"></p><p><span id="memoryPairs">0</span>/<span id="memoryMoves">0</span>/<span id="memoryTimerText">90</span></p><div id="memoryGrid"></div><button id="memoryStartBtn"></button><button id="memoryCloseBtn"></button></div>
+<div id="gameHubList"></div>
+<div id="signModal" style="display:none"><p id="signHint"></p><div id="signStrip"></div><button id="btnDoSign"></button></div>
+
+<script type="module">
+const log = [];
+const out = document.getElementById("result");
+const errors = [];
+window.addEventListener("error", e => errors.push(`window.error: ${e.message}`));
+window.addEventListener("unhandledrejection", e => errors.push(`rejection: ${e.reason}`));
+function report() {
+  out.textContent = JSON.stringify({ log, errors }, null, 2);
+}
+
+const { AppStore } = await import("../js/store.js?v=20261110.7");
+const { renderGameHub, renderSignPanel } = await import("../js/render.js?v=20261110.7");
+const whack = await import("../js/game-whack.js?v=20261110.7");
+const memory = await import("../js/game-memory.js?v=20261110.7");
+
+try {
+  AppStore.data = AppStore.freshData();
+  localStorage.clear();
+  AppStore.data = AppStore.freshData();
+
+  // 1. 游戏中心渲染
+  renderGameHub();
+  const cards = document.querySelectorAll(".game-card").length;
+  log.push(["hub cards", cards]);
+
+  // 2. 打地鼠：开始后地鼠会冒头，点击所有洞能得分
+  whack.openWhackGame();
+  whack.startWhackGame();
+  const holes = () => Array.from(document.querySelectorAll(".whack-hole"));
+  log.push(["holes built", holes().length]);
+  let clickTimer = setInterval(() => {
+    holes().forEach(h => { if (h.classList.contains("up")) h.click(); });
+  }, 60);
+
+  await new Promise(r => setTimeout(r, 2600));
+  clearInterval(clickTimer);
+  log.push(["whack score", document.getElementById("whackScore").textContent]);
+  log.push(["whack timer", document.getElementById("whackTimerText").textContent]);
+  whack.closeWhackGame();
+
+  // 3. 翻翻乐：点两张牌，步数应 +1
+  memory.openMemoryGame();
+  memory.startMemoryGame();
+  const cards2 = document.querySelectorAll(".memory-card");
+  log.push(["memory cards", cards2.length]);
+  cards2[0].click();
+  cards2[1].click();
+  await new Promise(r => setTimeout(r, 900));
+  log.push(["memory moves", document.getElementById("memoryMoves").textContent]);
+  log.push(["memory flipped", document.querySelectorAll(".memory-card.flipped").length]);
+  memory.closeMemoryGame();
+
+  // 4. 七天签到面板：应有 7 格、今天的格子高亮
+  renderSignPanel();
+  log.push(["sign days", document.querySelectorAll(".sign-day").length]);
+  log.push(["sign today", document.querySelectorAll(".sign-day.today").length]);
+  log.push(["sign done", document.querySelectorAll(".sign-day.done").length]);
+  // 连签未断时：昨天的 2 档应显示已完成，今天落在第 3 档
+  const yd = new Date(); yd.setDate(yd.getDate() - 1);
+  AppStore.data.signLastDate = `${yd.getFullYear()}-${String(yd.getMonth() + 1).padStart(2, "0")}-${String(yd.getDate()).padStart(2, "0")}`;
+  AppStore.data.signContinueDay = 2;
+  renderSignPanel();
+  log.push(["sign continued done", document.querySelectorAll(".sign-day.done").length]);
+  log.push(["sign continued today", document.querySelectorAll(".sign-day.today").length]);
+
+  log.push(["done", true]);
+} catch (e) {
+  errors.push("exception: " + (e && e.stack ? e.stack : e));
+}
+report();
+</script>
+</body>
+</html>
